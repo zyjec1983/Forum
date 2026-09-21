@@ -79,7 +79,7 @@ class Response
         return array_map('intval', $row);
     }
 
-    /** Listing for the admin panel. */
+    /** Listing for the admin/teacher panel. */
     public static function allFiltered(array $filters = []): array
     {
         $sql    = "SELECT r.*, u.first_name, u.last_name, u.email, s.name AS salon_name,
@@ -100,6 +100,10 @@ class Response
             $sql      .= " AND r.forum_id = ?";
             $params[] = (int) $filters['forum_id'];
         }
+        if (!empty($filters['teacher_id'])) {
+            $sql .= " AND r.forum_id IN (SELECT id FROM forums WHERE created_by = ?)";
+            $params[] = (int) $filters['teacher_id'];
+        }
         if (!empty($filters['search'])) {
             $sql .= " AND (u.first_name LIKE ? OR u.last_name LIKE ? OR r.content LIKE ? OR u.email LIKE ?)";
             $like = '%' . $filters['search'] . '%';
@@ -111,9 +115,22 @@ class Response
         return Database::fetchAll($sql, $params);
     }
 
-    public static function total(): int
+    public static function total(?int $teacherId = null): int
     {
-        return Database::count("SELECT COUNT(*) AS c FROM responses");
+        if ($teacherId === null) {
+            return Database::count("SELECT COUNT(*) AS c FROM responses");
+        }
+        return Database::count(
+            "SELECT COUNT(*) AS c FROM responses r JOIN forums f ON f.id = r.forum_id
+             WHERE f.created_by = ?",
+            [$teacherId]
+        );
+    }
+
+    /** Deletes a response (its replies cascade through the parent FK). */
+    public static function delete(int $id): void
+    {
+        Database::execute("DELETE FROM responses WHERE id = ?", [$id]);
     }
 
     public static function partnerJoinedActions(int $forumId): array

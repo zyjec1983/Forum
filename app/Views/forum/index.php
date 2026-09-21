@@ -1,8 +1,9 @@
 <?php
+$__isStaff = in_array($user['role'] ?? '', ['admin', 'teacher'], true);
 $__isAdmin = ($user['role'] ?? '') === 'admin';
 $__openTs  = strtotime($forum['open_at']);
 $__closeTs = strtotime($forum['close_at']);
-$__interactive = ($interactive ?? false) && !$__isAdmin;
+$__interactive = ($interactive ?? false) && !$__isStaff;
 ?>
 <?php include APP_PATH . '/Views/shared/_head.php'; ?>
 
@@ -13,8 +14,8 @@ $__interactive = ($interactive ?? false) && !$__isAdmin;
             <?= e(APP_NAME) ?>
         </a>
         <div class="d-flex align-items-center gap-2 ms-auto">
-            <?php if ($__isAdmin): ?>
-                <a href="<?= e(base_url('admin')) ?>" class="btn btn-sm btn-outline-light">Admin Panel</a>
+            <?php if ($__isStaff): ?>
+                <a href="<?= e(base_url('admin')) ?>" class="btn btn-sm btn-outline-light"><?= $__isAdmin ? 'Admin Panel' : 'My panel' ?></a>
             <?php endif; ?>
             <div class="dropdown">
                 <button class="btn btn-sm btn-light dropdown-toggle d-flex align-items-center gap-2" data-bs-toggle="dropdown">
@@ -53,7 +54,7 @@ $__interactive = ($interactive ?? false) && !$__isAdmin;
             <div class="col-12 col-lg-9">
         <?php include APP_PATH . '/Views/shared/_flash.php'; ?>
 
-        <?php if (!$__interactive && !$__isAdmin): ?>
+        <?php if (!$__interactive && !$__isStaff): ?>
             <div class="alert alert-info small py-2">
                 <i class="bi bi-info-circle me-1"></i>
                 This forum is shown <strong>read-only</strong>: only the currently active forum accepts participation.

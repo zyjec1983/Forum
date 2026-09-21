@@ -11,14 +11,17 @@ class AuthController extends Controller
     public function showRegister(): void
     {
         if (is_logged()) {
-            redirect(base_url('forum'));
+            redirect_after_login();
         }
         $old    = $_SESSION['old'] ?? [];
         unset($_SESSION['old']);
         $this->view('auth/register', [
-            'salones'  => Salon::all(),
-            'old'      => $old,
-            'pageTitle' => 'Student Registration',
+            'salones'     => Salon::all(),
+            'old'         => $old,
+            'pageTitle'   => 'Student Registration',
+            'anyDomain'   => any_domain_allowed(),
+            'domainsHint' => implode(', ', allowed_domains()),
+            'domainsList' => allowed_domains(),
         ]);
     }
 
@@ -36,8 +39,8 @@ class AuthController extends Controller
 
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $errors[] = 'The email entered is not valid.';
-        } elseif (substr($email, -strlen('@' . ID_DOMAIN)) !== '@' . ID_DOMAIN) {
-            $errors[] = 'You must use your institutional email (@' . ID_DOMAIN . ').';
+        } elseif (!domain_allowed($email)) {
+            $errors[] = 'You must use an accepted email domain (' . implode(', ', allowed_domains()) . ').';
         }
 
         if (!preg_match(NAME_PATTERN, $fn)) {
@@ -55,13 +58,13 @@ class AuthController extends Controller
             $errors[] = 'Passwords do not match.';
         }
         if (User::findByEmail($email)) {
-            $errors[] = 'This institutional email is already registered.';
+            $errors[] = 'This email is already registered.';
         }
 
         if ($errors) {
             $_SESSION['old'] = $_POST;
             flash_set('error', implode('<br>', array_map('e', $errors)));
-            redirect_back();
+            redirect(base_url('auth/register'));
         }
 
         $userId = User::create([
@@ -77,7 +80,79 @@ class AuthController extends Controller
         $_SESSION['user'] = $user;
         SecurityLog::record($userId, 'register', 'New student registration (' . $email . ')', client_ip());
         flash_set('success', 'Account created! Welcome <strong>' . e($fn . ' ' . $ln) . '</strong> to the academic forum.');
-        redirect(base_url('forum'));
+        redirect_after_login();
+    }
+
+    // ------------------------------------------------------------------
+    // TEACHER REGISTRATION
+    // ------------------------------------------------------------------
+    public function showRegisterTeacher(): void
+    {
+        if (is_logged()) {
+            redirect_after_login();
+        }
+        $old = $_SESSION['old'] ?? [];
+        unset($_SESSION['old']);
+        $this->view('auth/register_teacher', [
+            'old'         => $old,
+            'pageTitle'   => 'Teacher Registration',
+            'anyDomain'   => any_domain_allowed(),
+            'domainsHint' => implode(', ', allowed_domains()),
+            'domainsList' => allowed_domains(),
+        ]);
+    }
+
+    public function registerTeacher(): void
+    {
+        csrf_check();
+        $email = mb_strtolower(trim($_POST['email'] ?? ''));
+        $fn    = trim($_POST['first_name'] ?? '');
+        $ln    = trim($_POST['last_name'] ?? '');
+        $pass  = (string) ($_POST['password'] ?? '');
+        $pass2 = (string) ($_POST['password_confirm'] ?? '');
+
+        $errors = [];
+
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $errors[] = 'The email entered is not valid.';
+        } elseif (!domain_allowed($email)) {
+            $errors[] = 'You must use an accepted email domain (' . implode(', ', allowed_domains()) . ').';
+        }
+        if (!preg_match(NAME_PATTERN, $fn)) {
+            $errors[] = 'Enter a valid first name (letters only).';
+        }
+        if (!preg_match(NAME_PATTERN, $ln)) {
+            $errors[] = 'Enter a valid first surname (letters only).';
+        }
+        if (mb_strlen($pass) < 6) {
+            $errors[] = 'The password must be at least 6 characters long.';
+        } elseif ($pass !== $pass2) {
+            $errors[] = 'Passwords do not match.';
+        }
+        if (User::findByEmail($email)) {
+            $errors[] = 'This email is already registered.';
+        }
+
+        if ($errors) {
+            $_SESSION['old'] = $_POST;
+            flash_set('error', implode('<br>', array_map('e', $errors)));
+            redirect(base_url('auth/register-teacher'));
+        }
+
+        $userId = User::create([
+            'email'      => $email,
+            'first_name' => $fn,
+            'last_name'  => $ln,
+            'salon_id'   => null,
+            'password'   => password_hash($pass, PASSWORD_DEFAULT),
+            'role'       => 'teacher',
+        ]);
+
+        $user = User::findById($userId);
+        $_SESSION['user'] = $user;
+        SecurityLog::record($userId, 'register', 'New teacher registration (' . $email . ')', client_ip());
+        flash_set('success', 'Teacher account created! Welcome <strong>' . e($fn . ' ' . $ln) . '</strong>.');
+        redirect_after_login();
     }
 
     // ------------------------------------------------------------------
@@ -86,7 +161,7 @@ class AuthController extends Controller
     public function showLogin(): void
     {
         if (is_logged()) {
-            redirect(base_url('forum'));
+            redirect_after_login();
         }
         $this->view('auth/login', ['pageTitle' => 'Sign In']);
     }
@@ -115,7 +190,7 @@ class AuthController extends Controller
             $_SESSION['user'] = User::findById($user['id']);
             SecurityLog::record($user['id'], 'login', 'Successful sign-in', client_ip());
             flash_set('success', 'Welcome <strong>' . e($_SESSION['user']['first_name'] . ' ' . $_SESSION['user']['last_name']) . '</strong>.');
-            redirect($_SESSION['user']['role'] === 'admin' ? base_url('admin') : base_url('forum'));
+            redirect_after_login();
         }
 
         $attempts = User::registerFailedAttempt($user['id']);
@@ -135,7 +210,7 @@ class AuthController extends Controller
     public function showRecover(): void
     {
         if (is_logged()) {
-            redirect(base_url('forum'));
+            redirect_after_login();
         }
         $recoverKey = flash_get('recover_key');
         $this->view('auth/recover', [

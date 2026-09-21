@@ -1,10 +1,12 @@
-<?php $activeNav = 'responses'; ?>
+<?php $activeNav = 'responses';
+$__isAdminRole = is_admin_user();
+?>
 <?php include APP_PATH . '/Views/admin/_admin_head.php'; ?>
 
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
     <div>
         <h1 class="h4 fw-bold mb-0">Forum Responses</h1>
-        <p class="text-muted small mb-0">Student participation in the active forum and detailed view of all responses.</p>
+        <p class="text-muted small mb-0"><?= $__isAdminRole ? 'Student participation in the active forum and detailed view of all responses.' : 'Participation of your students and detailed view of all responses in your forums.' ?></p>
     </div>
 </div>
 
@@ -82,6 +84,7 @@
                     <th>Student</th>
                     <th>Type</th>
                     <th>Content</th>
+                    <?php if ($__isAdminRole): ?><th class="text-end">Action</th><?php endif; ?>
                 </tr>
             </thead>
             <tbody>
@@ -102,10 +105,20 @@
                             <?= e(mb_strimwidth($r['content'], 0, 160, '…')) ?>
                             <div class="text-muted mt-1"><?= e($r['forum_title'] ?? '') ?></div>
                         </td>
+                        <?php if ($__isAdminRole): ?>
+                            <td class="text-end text-nowrap">
+                                <form method="post" action="<?= e(base_url('admin/responses/delete')) ?>" class="d-inline"
+                                      onsubmit="return confirm('Delete this response (ID <?= (int) $r['id'] ?>)? Its replies will also be removed.');">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="response_id" value="<?= (int) $r['id'] ?>">
+                                    <button class="btn btn-sm btn-outline-danger">Delete</button>
+                                </form>
+                            </td>
+                        <?php endif; ?>
                     </tr>
                 <?php endforeach; ?>
                 <?php if (!$responses): ?>
-                    <tr><td colspan="4" class="text-center text-muted py-4">No responses matched the filters.</td></tr>
+                    <tr><td colspan="<?= $__isAdminRole ? 5 : 4 ?>" class="text-center text-muted py-4">No responses matched the filters.</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>

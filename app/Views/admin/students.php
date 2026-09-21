@@ -1,10 +1,12 @@
-<?php $activeNav = 'students'; ?>
+<?php $activeNav = 'students';
+$__isAdminRole = is_admin_user();
+?>
 <?php include APP_PATH . '/Views/admin/_admin_head.php'; ?>
 
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
     <div>
         <h1 class="h4 fw-bold mb-0">Students</h1>
-        <p class="text-muted small mb-0">Register students or manage their lock status from here.</p>
+        <p class="text-muted small mb-0"><?= $__isAdminRole ? 'Register students or manage their lock status from here.' : 'Students registered in your classrooms. You can block or unblock them.' ?></p>
     </div>
     <button class="btn btn-sm btn-primary fw-bold" data-bs-toggle="collapse" data-bs-target="#addStudent">+ Register student</button>
 </div>
@@ -94,7 +96,7 @@
                                 <span class="badge text-bg-success">Active</span>
                             <?php endif; ?>
                         </td>
-                        <td class="text-end">
+                        <td class="text-end text-nowrap">
                             <form method="post" action="<?= e(base_url('admin/students/toggle')) ?>" class="d-inline">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="user_id" value="<?= (int) $st['id'] ?>">
@@ -102,6 +104,14 @@
                                     <?= (int) $st['locked'] ? 'Unlock' : 'Lock' ?>
                                 </button>
                             </form>
+                            <?php if ($__isAdminRole): ?>
+                                <form method="post" action="<?= e(base_url('admin/students/delete')) ?>" class="d-inline"
+                                      onsubmit="return confirm('Delete the student <?= e(addslashes($st['first_name'] . ' ' . $st['last_name'])) ?>? Their responses and the audit trail of their account will be removed. This action cannot be undone.');">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="user_id" value="<?= (int) $st['id'] ?>">
+                                    <button class="btn btn-sm btn-outline-danger">Delete</button>
+                                </form>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 <?php endforeach; ?>

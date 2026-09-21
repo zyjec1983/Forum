@@ -15,15 +15,20 @@ class Forum
         );
     }
 
-    public static function all(): array
+    /** All forums. When $teacherId is set, only the forums created by that teacher. */
+    public static function all(?int $teacherId = null): array
     {
-        return Database::fetchAll(
-            "SELECT f.*, u.first_name, u.last_name,
+        $sql = "SELECT f.*, u.first_name, u.last_name,
                     (SELECT COUNT(*) FROM responses r WHERE r.forum_id = f.id) AS total_responses
              FROM forums f
-             LEFT JOIN users u ON u.id = f.created_by
-             ORDER BY f.created_at DESC"
-        );
+             LEFT JOIN users u ON u.id = f.created_by";
+        $params = [];
+        if ($teacherId !== null) {
+            $sql      .= " WHERE f.created_by = ?";
+            $params[] = $teacherId;
+        }
+        $sql .= " ORDER BY f.created_at DESC";
+        return Database::fetchAll($sql, $params);
     }
 
     public static function create(array $d): int
@@ -59,6 +64,21 @@ class Forum
     public static function find(int $id): ?array
     {
         return Database::fetchOne("SELECT * FROM forums WHERE id = ? LIMIT 1", [$id]);
+    }
+
+    /** Whether the forum was created by the given teacher/admin. */
+    public static function ownedBy(int $forumId, int $userId): bool
+    {
+        return (bool) Database::fetchOne(
+            "SELECT 1 FROM forums WHERE id = ? AND created_by = ? LIMIT 1",
+            [$forumId, $userId]
+        );
+    }
+
+    /** Deletes a forum (responses and classroom assignments cascade). */
+    public static function deleteForum(int $forumId): void
+    {
+        Database::execute("DELETE FROM forums WHERE id = ?", [$forumId]);
     }
 
     public static function updateWindow(int $id, string $openAt, string $closeAt): void

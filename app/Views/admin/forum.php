@@ -1,4 +1,6 @@
-<?php $activeNav = 'forum'; ?>
+<?php $activeNav = 'forum';
+$__isAdminRole = is_admin_user();
+?>
 <?php $salonNames = []; foreach (($salones ?? []) as $__s) { $salonNames[(int) $__s['id']] = $__s['name']; } ?>
 <?php include APP_PATH . '/Views/admin/_admin_head.php'; ?>
 
@@ -136,6 +138,14 @@
                                             <?= csrf_field() ?>
                                             <input type="hidden" name="forum_id" value="<?= (int) $f['id'] ?>">
                                             <button class="btn btn-sm btn-outline-primary">Activate</button>
+                                        </form>
+                                    <?php endif; ?>
+                                    <?php if ($__isAdminRole): ?>
+                                        <form method="post" action="<?= e(base_url('admin/forum/delete')) ?>" class="d-inline"
+                                              onsubmit="return confirm('Delete the forum <?= e(addslashes($f['title'])) ?> along with all its responses? This action cannot be undone.');">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="forum_id" value="<?= (int) $f['id'] ?>">
+                                            <button class="btn btn-sm btn-outline-danger">Delete</button>
                                         </form>
                                     <?php endif; ?>
                                 </td>

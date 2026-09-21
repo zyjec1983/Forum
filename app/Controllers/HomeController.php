@@ -9,9 +9,9 @@ class HomeController extends Controller
     public function index(): void
     {
         if (is_logged()) {
-            redirect(base_url('forum'));
+            redirect_after_login();
         }
-        // Security: any unauthenticated access goes to data capture (registration)
+        // Security: any unauthenticated access goes to the sign-in form
         redirect(base_url('auth/login'));
     }
 }

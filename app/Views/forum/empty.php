@@ -1,4 +1,5 @@
 <?php
+$__isStaff = in_array($user['role'] ?? '', ['admin', 'teacher'], true);
 $__isAdmin = ($user['role'] ?? '') === 'admin';
 $__hasAssigned = !empty($assigned);
 ?>
@@ -8,8 +9,8 @@ $__hasAssigned = !empty($assigned);
     <div class="container-lg">
         <a class="navbar-brand fw-bold small" href="<?= e(base_url('/')) ?>"><?= e(APP_NAME) ?></a>
         <div class="d-flex align-items-center gap-2 ms-auto">
-            <?php if ($__isAdmin): ?>
-                <a href="<?= e(base_url('admin')) ?>" class="btn btn-sm btn-outline-light">Admin Panel</a>
+            <?php if ($__isStaff): ?>
+                <a href="<?= e(base_url('admin')) ?>" class="btn btn-sm btn-outline-light"><?= $__isAdmin ? 'Admin Panel' : 'My panel' ?></a>
             <?php endif; ?>
             <a href="<?= e(base_url('auth/logout')) ?>" class="btn btn-sm btn-light">Sign out</a>
         </div>

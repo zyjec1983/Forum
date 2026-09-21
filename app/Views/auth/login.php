@@ -27,11 +27,16 @@
                         <button type="submit" class="btn btn-primary w-100 fw-semibold py-2">Sign in</button>
                     </form>
 
-                    <div class="d-flex justify-content-between align-items-center mt-3 small flex-wrap gap-2">
-                        <a href="<?= e(base_url('auth/register')) ?>">Create account</a>
-                        <a href="<?= e(base_url('auth/recover')) ?>" class="text-danger text-decoration-none">
-                            <i class="bi bi-key"></i> Recover password
-                        </a>
+                    <div class="d-flex flex-column gap-2 mt-3 small">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <a href="<?= e(base_url('auth/register')) ?>"><i class="bi bi-mortarboard"></i> Soy estudiante · Create account</a>
+                            <a href="<?= e(base_url('auth/register-teacher')) ?>"><i class="bi bi-person-workspace"></i> Soy docente · Teacher account</a>
+                        </div>
+                        <div>
+                            <a href="<?= e(base_url('auth/recover')) ?>" class="text-danger text-decoration-none">
+                                <i class="bi bi-key"></i> Recover password
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>

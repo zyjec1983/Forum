@@ -17,17 +17,28 @@ DROP TABLE IF EXISTS `forum_salones`;
 DROP TABLE IF EXISTS `forums`;
 DROP TABLE IF EXISTS `users`;
 DROP TABLE IF EXISTS `salones`;
+DROP TABLE IF EXISTS `settings`;
 
--- Classrooms managed by the administrator (9th "A", 9th "B", ...)
+-- Global configuration (key-value)
+CREATE TABLE `settings` (
+    `setting_key`   VARCHAR(50)  NOT NULL,
+    `setting_value` VARCHAR(255) NOT NULL,
+    PRIMARY KEY (`setting_key`)
+) ENGINE=InnoDB;
+
+-- Classrooms managed by the administrator / teacher (9th "A", 9th "B", ...)
 CREATE TABLE `salones` (
     `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `name`       VARCHAR(80)  NOT NULL,
+    `teacher_id` INT UNSIGNED NULL,
     `created_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uq_salones_name` (`name`)
+    UNIQUE KEY `uq_salones_name` (`name`),
+    KEY `fk_salones_teacher` (`teacher_id`),
+    CONSTRAINT `fk_salones_teacher` FOREIGN KEY (`teacher_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- Users (students and administrators)
+-- Users (students, teachers and the administrator)
 CREATE TABLE `users` (
     `id`              INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `email`           VARCHAR(190) NOT NULL,
@@ -35,7 +46,7 @@ CREATE TABLE `users` (
     `last_name`       VARCHAR(60)  NOT NULL,
     `salon_id`        INT UNSIGNED NULL,
     `password`        VARCHAR(255) NOT NULL,
-    `role`            ENUM('student','admin') NOT NULL DEFAULT 'student',
+    `role`            ENUM('student','teacher','admin') NOT NULL DEFAULT 'student',
     `failed_attempts` TINYINT UNSIGNED NOT NULL DEFAULT 0,
     `locked`          TINYINT(1) NOT NULL DEFAULT 0,
     `created_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -110,6 +121,12 @@ CREATE TABLE `security_logs` (
 -- ============================================================
 --  INITIAL DATA
 -- ============================================================
+-- Global settings: accepted email domains for registration.
+-- 'allow_any_domain' = 1 accepts any domain (gmail.com, outlook.com, ...).
+INSERT INTO `settings` (`setting_key`, `setting_value`) VALUES
+('allow_any_domain', '0'),
+('accepted_domains', 'ecomundo.edu.ec');
+
 INSERT INTO `salones` (`name`) VALUES ('9th "A"'), ('9th "B"'), ('9th "C"'), ('9th "D"'), ('9th "E"');
 
 -- Default administrator: admin@ecomundo.edu.ec / Admin@2026

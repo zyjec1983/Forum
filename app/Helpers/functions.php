@@ -130,6 +130,58 @@ function require_admin(): void
     }
 }
 
+/**
+ * Area for the administrator and the teachers.
+ * Destructive actions within the panel are still restricted to the admin.
+ */
+function require_staff(): void
+{
+    require_login();
+    if (!in_array(current_user()['role'] ?? '', ['admin', 'teacher'], true)) {
+        http_response_code(403);
+        exit('Access denied. This area is exclusive to the administrator and teachers.');
+    }
+}
+
+function is_staff(): bool
+{
+    return in_array(current_user()['role'] ?? '', ['admin', 'teacher'], true);
+}
+
+function is_admin_user(): bool
+{
+    return (current_user()['role'] ?? '') === 'admin';
+}
+
+/** Where a logged user goes after sign-in / registration. */
+function redirect_after_login(): void
+{
+    redirect(is_staff() ? base_url('admin') : base_url('forum'));
+}
+
+// ------------------------------------------------
+// Registration domain settings
+// ------------------------------------------------
+function setting_get(string $key, ?string $default = null): ?string
+{
+    return Settings::get($key, $default);
+}
+
+function any_domain_allowed(): bool
+{
+    return Settings::anyDomainAllowed();
+}
+
+function allowed_domains(): array
+{
+    return Settings::domains();
+}
+
+function domain_allowed(string $email): bool
+{
+    return Settings::emailDomainAllowed($email);
+}
+
 function json_out(array $data, int $code = 200): void
 {
     http_response_code($code);

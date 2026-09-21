@@ -1,23 +1,25 @@
-<?php $activeNav = 'dashboard'; ?>
+<?php $activeNav = 'dashboard';
+$__isAdminRole = is_admin_user();
+?>
 <?php include APP_PATH . '/Views/admin/_admin_head.php'; ?>
 
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
     <div>
-        <h1 class="h4 fw-bold mb-0">Dashboard</h1>
-        <p class="text-muted small mb-0">Academic forum summary.</p>
+        <h1 class="h4 fw-bold mb-0"><?= $__isAdminRole ? 'Dashboard' : 'My dashboard' ?></h1>
+        <p class="text-muted small mb-0"><?= $__isAdminRole ? 'Academic forum summary.' : 'Summary of your classrooms, forums and students.' ?></p>
     </div>
 </div>
 
 <div class="row g-3 mb-3">
-    <div class="col-6 col-md-3">
+    <div class="col-6 col-md-4">
         <div class="card border-0 shadow-sm stat-card">
             <div class="card-body">
                 <div class="fs-4 fw-bold"><?= (int) $stats['students'] ?></div>
-                <div class="text-muted small">Students</div>
+                <div class="text-muted small"><?= $__isAdminRole ? 'Students' : 'Students in my classrooms' ?></div>
             </div>
         </div>
     </div>
-    <div class="col-6 col-md-3">
+    <div class="col-6 col-md-4">
         <div class="card border-0 shadow-sm stat-card">
             <div class="card-body">
                 <div class="fs-4 fw-bold"><?= (int) $stats['responses'] ?></div>
@@ -25,7 +27,7 @@
             </div>
         </div>
     </div>
-    <div class="col-6 col-md-3">
+    <div class="col-6 col-md-4">
         <div class="card border-0 shadow-sm stat-card">
             <div class="card-body">
                 <div class="fs-4 fw-bold"><?= (int) $stats['conclusions'] ?></div>
@@ -33,7 +35,23 @@
             </div>
         </div>
     </div>
-    <div class="col-6 col-md-3">
+    <div class="col-6 col-md-4">
+        <div class="card border-0 shadow-sm stat-card">
+            <div class="card-body">
+                <div class="fs-4 fw-bold"><?= (int) $stats['forums'] ?></div>
+                <div class="text-muted small">Forums</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4">
+        <div class="card border-0 shadow-sm stat-card">
+            <div class="card-body">
+                <div class="fs-4 fw-bold"><?= (int) $stats['salones'] ?></div>
+                <div class="text-muted small">Classrooms</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4">
         <div class="card border-0 shadow-sm stat-card">
             <div class="card-body">
                 <div class="fs-4 fw-bold"><?= (int) $stats['attempts'] ?></div>

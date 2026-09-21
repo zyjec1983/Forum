@@ -33,6 +33,13 @@ class SecurityLog
             $sql      .= " AND l.event = ?";
             $params[] = $filters['event'];
         }
+        if (!empty($filters['user_ids'])) {
+            $ids = array_values(array_unique(array_map('intval', (array) $filters['user_ids'])));
+            $ids = array_filter($ids, function ($id) { return $id > 0; });
+            if ($ids) {
+                $sql .= " AND l.user_id IN (" . implode(',', $ids) . ")";
+            }
+        }
         if (!empty($filters['search'])) {
             $sql .= " AND (u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ? OR l.detail LIKE ? OR l.ip LIKE ?)";
             $like = '%' . $filters['search'] . '%';
@@ -44,14 +51,47 @@ class SecurityLog
         return Database::fetchAll($sql, $params);
     }
 
-    public static function count(): int
+    public static function count(?array $userIds = null): int
     {
-        return Database::count("SELECT COUNT(*) AS c FROM security_logs");
+        if ($userIds === null) {
+            return Database::count("SELECT COUNT(*) AS c FROM security_logs");
+        }
+        $ids = array_values(array_unique(array_map('intval', $userIds)));
+        $ids = array_filter($ids, function ($id) { return $id > 0; });
+        if (!$ids) {
+            return 0;
+        }
+        return Database::count("SELECT COUNT(*) AS c FROM security_logs WHERE user_id IN (" . implode(',', $ids) . ")");
     }
 
-    public static function countToday(): int
+    public static function countToday(?array $userIds = null): int
     {
-        return Database::count("SELECT COUNT(*) AS c FROM security_logs WHERE DATE(created_at) = CURDATE()");
+        if ($userIds === null) {
+            return Database::count("SELECT COUNT(*) AS c FROM security_logs WHERE DATE(created_at) = CURDATE()");
+        }
+        $ids = array_values(array_unique(array_map('intval', $userIds)));
+        $ids = array_filter($ids, function ($id) { return $id > 0; });
+        if (!$ids) {
+            return 0;
+        }
+        return Database::count(
+            "SELECT COUNT(*) AS c FROM security_logs WHERE DATE(created_at) = CURDATE() AND user_id IN (" . implode(',', $ids) . ")"
+        );
+    }
+
+    public static function find(int $id): ?array
+    {
+        return Database::fetchOne("SELECT * FROM security_logs WHERE id = ? LIMIT 1", [$id]);
+    }
+
+    public static function delete(int $id): void
+    {
+        Database::execute("DELETE FROM security_logs WHERE id = ?", [$id]);
+    }
+
+    public static function clear(): void
+    {
+        Database::execute("DELETE FROM security_logs");
     }
 
     /** Human readable label for each event shown in the admin panel. */
@@ -82,10 +122,17 @@ class SecurityLog
             'forum_created'          => 'Forum created',
             'forum_edited'           => 'Forum edited',
             'forum_reopened'         => 'Forum reopened',
+            'forum_deleted'          => 'Forum deleted',
             'salon_created'          => 'Classroom created',
             'salon_deleted'          => 'Classroom deleted',
             'student_locked'         => 'Student blocked',
             'student_unlocked'       => 'Student unblocked',
+            'student_deleted'        => 'Student deleted',
+            'teacher_deleted'        => 'Teacher deleted',
+            'response_deleted'       => 'Response deleted',
+            'log_deleted'            => 'Log entry deleted',
+            'logs_cleared'           => 'Security log cleared',
+            'settings_updated'       => 'Registration settings updated',
         ];
         return $labels[$event] ?? $event;
     }

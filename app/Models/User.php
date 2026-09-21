@@ -32,7 +32,7 @@ class User
                 mb_strtolower(trim($d['email'])),
                 trim($d['first_name']),
                 trim($d['last_name']),
-                (int) $d['salon_id'],
+                $d['salon_id'] === null || $d['salon_id'] === '' ? null : (int) $d['salon_id'],
                 $d['password'],
                 $d['role'] ?? 'student',
             ]
@@ -62,6 +62,10 @@ class User
         if (!empty($filters['role'])) {
             $sql      .= " AND u.role = ?";
             $params[] = $filters['role'];
+        }
+        if (!empty($filters['teacher_id'])) {
+            $sql .= " AND u.salon_id IN (SELECT id FROM salones WHERE teacher_id = ?)";
+            $params[] = (int) $filters['teacher_id'];
         }
 
         $sql .= " ORDER BY u.first_name ASC, u.last_name ASC";
@@ -103,5 +107,27 @@ class User
     {
         Database::execute("UPDATE users SET locked = IF(locked = 1, 0, 1) WHERE id = ?", [$id]);
         return (int) (self::findById($id)['locked'] ?? 0);
+    }
+
+    /**
+     * Deletes a user cleaning up their dependencies:
+     *  - a teacher's forums are deleted first (cascades responses + classroom
+     *    assignments); the teacher's classrooms are removed by cascade.
+     *  - the user's responses are removed by cascade and security logs keep
+     *    their rows with a NULL user.
+     */
+    public static function deleteUser(int $id): void
+    {
+        if ($id <= 0) {
+            return;
+        }
+        $user = self::findById($id);
+        if (!$user) {
+            return;
+        }
+        if ($user['role'] === 'teacher') {
+            Database::execute("DELETE FROM forums WHERE created_by = ?", [$id]);
+        }
+        Database::execute("DELETE FROM users WHERE id = ?", [$id]);
     }
 }

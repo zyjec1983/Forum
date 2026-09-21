@@ -1,30 +1,89 @@
 <?php
 /**
- * Admin panel: forum management (time window), classrooms, students,
- * responses and security audit.
+ * Panel for the administrator and teachers:
+ * forum management (time window), classrooms, students, responses, security
+ * audit, teacher accounts (admin only) and global settings (domains).
+ *
+ * Role rules:
+ *  - A teacher only sees the classrooms / forums / students they own.
+ *  - Destructive actions (delete, audit cleaning) are exclusive to the admin.
  */
 class AdminController extends Controller
 {
     private function guard(): void
     {
-        require_admin();
+        require_staff();
+    }
+
+    private function isAdmin(): bool
+    {
+        return is_admin_user();
+    }
+
+    private function uid(): int
+    {
+        return (int) (current_user()['id'] ?? 0);
+    }
+
+    /** Teacher id owning the current scope (null = admin sees everything). */
+    private function scope(): ?int
+    {
+        return $this->isAdmin() ? null : $this->uid();
+    }
+
+    private function assertAdmin(): void
+    {
+        if (!$this->isAdmin()) {
+            http_response_code(403);
+            exit('Only the administrator can perform this action. This attempt has been logged.');
+        }
     }
 
     public function dashboard(): void
     {
         $this->guard();
         $forum = Forum::active();
-        $stats = [
-            'students'    => User::studentsCount(),
-            'responses'   => Response::total(),
-            'conclusions' => Database::count("SELECT COUNT(*) AS c FROM responses WHERE type='conclusion'"),
-            'attempts'    => SecurityLog::count(),
-            'today'       => SecurityLog::countToday(),
-        ];
+
+        if ($this->scope() !== null) {
+            $teacherId  = $this->scope();
+            $salones    = Salon::all($teacherId);
+            $students   = User::all(['role' => 'student', 'teacher_id' => $teacherId]);
+            $forums     = Forum::all($teacherId);
+            $studentIds = array_column($students, 'id');
+
+            $stats = [
+                'students'    => count($students),
+                'responses'   => Response::total($teacherId),
+                'conclusions' => 0,
+                'attempts'    => SecurityLog::count(array_merge([$teacherId], $studentIds)),
+                'today'       => SecurityLog::countToday(array_merge([$teacherId], $studentIds)),
+                'forums'      => count($forums),
+                'salones'     => count($salones),
+            ];
+            foreach ($forums as $f) {
+                $stats['conclusions'] += (int) Database::count(
+                    "SELECT COUNT(*) AS c FROM responses WHERE type='conclusion' AND forum_id = ?",
+                    [(int) $f['id']]
+                );
+            }
+            $pageTitle = 'Teacher Panel';
+        } else {
+            $stats = [
+                'students'    => User::studentsCount(),
+                'responses'   => Response::total(),
+                'conclusions' => Database::count("SELECT COUNT(*) AS c FROM responses WHERE type='conclusion'"),
+                'attempts'    => SecurityLog::count(),
+                'today'       => SecurityLog::countToday(),
+                'forums'      => (int) Database::count("SELECT COUNT(*) AS c FROM forums"),
+                'salones'     => (int) Database::count("SELECT COUNT(*) AS c FROM salones"),
+            ];
+            $pageTitle = 'Admin Panel';
+        }
+
         $this->view('admin/dashboard', [
             'forum'     => $forum,
             'stats'     => $stats,
-            'pageTitle' => 'Admin Panel',
+            'pageTitle' => $pageTitle,
         ]);
     }
 
@@ -34,8 +93,9 @@ class AdminController extends Controller
     public function forumIndex(): void
     {
         $this->guard();
-        $salones = Salon::all();
-        $forums  = Forum::all();
+        $scope  = $this->scope();
+        $salones = Salon::all($scope);
+        $forums  = Forum::all($scope);
         foreach ($forums as &$f) {
             $f['salon_ids'] = Forum::salonsOf((int) $f['id']);
         }
@@ -48,28 +108,42 @@ class AdminController extends Controller
         ]);
     }
 
-    /** Reads + validates the classrooms checked in a forum form. */
+    /** Reads + validates the classrooms checked in a forum form, scoped for teachers. */
     private function classroomsFromPost(): array
     {
-        $ids = array_values(array_unique(array_map('intval', $_POST['salons'] ?? [])));
+        $ids   = array_values(array_unique(array_map('intval', $_POST['salons'] ?? [])));
         $valid = [];
         foreach ($ids as $id) {
-            if ($id > 0 && Salon::find($id)) {
-                $valid[] = $id;
+            if ($id <= 0) {
+                continue;
             }
+            $salon = Salon::find($id);
+            if (!$salon) {
+                continue;
+            }
+            if ($this->scope() !== null && !Salon::ownedBy($id, $this->scope())) {
+                continue;
+            }
+            $valid[] = $id;
         }
         return $valid;
+    }
+
+    private function ownsForum(array $forum): bool
+    {
+        $scope = $this->scope();
+        return $scope === null || (int) $forum['created_by'] === $scope;
     }
 
     public function forumCreate(): void
     {
         $this->guard();
         csrf_check();
-        $title    = trim($_POST['title'] ?? '');
-        $subject  = trim($_POST['subject'] ?? '');
-        $question = trim($_POST['question'] ?? '');
-        $open     = $_POST['open_at'] ?? '';
-        $close    = $_POST['close_at'] ?? '';
+        $title      = trim($_POST['title'] ?? '');
+        $subject    = trim($_POST['subject'] ?? '');
+        $question   = trim($_POST['question'] ?? '');
+        $open       = $_POST['open_at'] ?? '';
+        $close      = $_POST['close_at'] ?? '';
         $classrooms = $this->classroomsFromPost();
 
         $errors = [];
@@ -94,10 +168,10 @@ class AdminController extends Controller
             'question'  => $question,
             'open_at'   => date('Y-m-d H:i:s', strtotime($open)),
             'close_at'  => date('Y-m-d H:i:s', strtotime($close)),
-            'created_by' => (int) current_user()['id'],
+            'created_by' => $this->uid(),
         ]);
         Forum::setSalons($id, $classrooms);
-        SecurityLog::record(current_user()['id'], 'forum_created', 'Forum created: ' . $title . ' (' . count($classrooms) . ' classroom(s))', client_ip());
+        SecurityLog::record($this->uid(), 'forum_created', 'Forum created: ' . $title . ' (' . count($classrooms) . ' classroom(s))', client_ip());
         flash_set('success', 'Forum created. Remember: the participation window is <strong>'
             . e($open) . '</strong> to <strong>' . e($close) . '</strong>.');
         redirect(base_url('admin/forum'));
@@ -107,17 +181,17 @@ class AdminController extends Controller
     {
         $this->guard();
         csrf_check();
-        $id      = (int) ($_POST['forum_id'] ?? 0);
-        $forum   = Forum::find($id);
-        if (!$forum) {
+        $id    = (int) ($_POST['forum_id'] ?? 0);
+        $forum = Forum::find($id);
+        if (!$forum || !$this->ownsForum($forum)) {
             flash_set('error', 'Forum not found.');
             redirect(base_url('admin/forum'));
         }
-        $title    = trim($_POST['title'] ?? '');
-        $subject  = trim($_POST['subject'] ?? '');
-        $question = trim($_POST['question'] ?? '');
-        $open     = $_POST['open_at'] ?? '';
-        $close    = $_POST['close_at'] ?? '';
+        $title      = trim($_POST['title'] ?? '');
+        $subject    = trim($_POST['subject'] ?? '');
+        $question   = trim($_POST['question'] ?? '');
+        $open       = $_POST['open_at'] ?? '';
+        $close      = $_POST['close_at'] ?? '';
         $classrooms = $this->classroomsFromPost();
 
         $errors = [];
@@ -144,7 +218,7 @@ class AdminController extends Controller
             'close_at' => date('Y-m-d H:i:s', strtotime($close)),
         ]);
         Forum::setSalons($id, $classrooms);
-        SecurityLog::record(current_user()['id'], 'forum_edited', 'Forum edited: ' . $title . ' (' . count($classrooms) . ' classroom(s))', client_ip());
+        SecurityLog::record($this->uid(), 'forum_edited', 'Forum edited: ' . $title . ' (' . count($classrooms) . ' classroom(s))', client_ip());
         flash_set('success', 'Forum <strong>' . e($title) . '</strong> was updated correctly.');
         redirect(base_url('admin/forum'));
     }
@@ -154,7 +228,8 @@ class AdminController extends Controller
         $this->guard();
         csrf_check();
         $id = (int) ($_POST['forum_id'] ?? 0);
-        if (!Forum::exists($id)) {
+        $forum = Forum::find($id);
+        if (!$forum || !$this->ownsForum($forum)) {
             flash_set('error', 'Forum not found.');
             redirect(base_url('admin/forum'));
         }
@@ -169,7 +244,7 @@ class AdminController extends Controller
         csrf_check();
         $id    = (int) ($_POST['forum_id'] ?? 0);
         $forum = Forum::find($id);
-        if (!$forum) {
+        if (!$forum || !$this->ownsForum($forum)) {
             flash_set('error', 'Forum not found.');
             redirect(base_url('admin/forum'));
         }
@@ -188,8 +263,25 @@ class AdminController extends Controller
         }
 
         Forum::updateWindow($id, date('Y-m-d H:i:s', strtotime($open)), date('Y-m-d H:i:s', strtotime($close)));
-        SecurityLog::record(current_user()['id'], 'forum_reopened', 'Forum reopened: ' . $forum['title'], client_ip());
+        SecurityLog::record($this->uid(), 'forum_reopened', 'Forum reopened: ' . $forum['title'], client_ip());
         flash_set('success', 'Forum reopened with a new time window: <strong>' . e($open) . '</strong> → <strong>' . e($close) . '</strong>.');
+        redirect(base_url('admin/forum'));
+    }
+
+    public function forumDelete(): void
+    {
+        $this->guard();
+        $this->assertAdmin();
+        csrf_check();
+        $id    = (int) ($_POST['forum_id'] ?? 0);
+        $forum = Forum::find($id);
+        if (!$forum) {
+            flash_set('error', 'Forum not found.');
+            redirect(base_url('admin/forum'));
+        }
+        Forum::deleteForum($id);
+        SecurityLog::record($this->uid(), 'forum_deleted', 'Forum deleted: ' . $forum['title'], client_ip());
+        flash_set('success', 'Forum <strong>' . e($forum['title']) . '</strong> deleted along with its responses.');
         redirect(base_url('admin/forum'));
     }
 
@@ -199,8 +291,10 @@ class AdminController extends Controller
     public function salones(): void
     {
         $this->guard();
+        $teacherId = $this->scope();
         $this->view('admin/salones', [
-            'salones'   => Salon::all(),
+            'salones'   => Salon::all($teacherId),
+            'teachers'  => $this->isAdmin() ? User::all(['role' => 'teacher']) : [],
             'pageTitle' => 'Classrooms',
         ]);
     }
@@ -209,7 +303,8 @@ class AdminController extends Controller
     {
         $this->guard();
         csrf_check();
-        $name = trim($_POST['name'] ?? '');
+        $name   = trim($_POST['name'] ?? '');
+        $owner  = (int) ($_POST['teacher_id'] ?? 0);
         if ($name === '') {
             flash_set('error', 'The classroom name is required.');
             redirect_back();
@@ -219,8 +314,18 @@ class AdminController extends Controller
             flash_set('error', 'That classroom already exists.');
             redirect_back();
         }
-        Salon::create($name);
-        SecurityLog::record(current_user()['id'], 'salon_created', 'Classroom created: ' . $name, client_ip());
+        if (!$this->isAdmin()) {
+            $owner = $this->uid();
+        } elseif ($owner > 0) {
+            $ownerUser = User::findById($owner);
+            if (!$ownerUser || $ownerUser['role'] !== 'teacher') {
+                $owner = null;
+            }
+        } else {
+            $owner = null;
+        }
+        Salon::create($name, $owner);
+        SecurityLog::record($this->uid(), 'salon_created', 'Classroom created: ' . $name, client_ip());
         flash_set('success', 'Classroom <strong>' . e($name) . '</strong> added.');
         redirect(base_url('admin/salones'));
     }
@@ -235,8 +340,12 @@ class AdminController extends Controller
             flash_set('error', 'Classroom not found.');
             redirect(base_url('admin/salones'));
         }
+        if ($this->scope() !== null && !Salon::ownedBy($id, $this->scope())) {
+            flash_set('error', 'You can only delete your own classrooms.');
+            redirect(base_url('admin/salones'));
+        }
         Salon::delete($id);
-        SecurityLog::record(current_user()['id'], 'salon_deleted', 'Classroom deleted: ' . $salon['name'], client_ip());
+        SecurityLog::record($this->uid(), 'salon_deleted', 'Classroom deleted: ' . $salon['name'], client_ip());
         flash_set('success', 'Classroom deleted. Students were left without an assigned classroom.');
         redirect(base_url('admin/salones'));
     }
@@ -247,16 +356,28 @@ class AdminController extends Controller
     public function students(): void
     {
         $this->guard();
+        $teacherId = $this->scope();
         $this->view('admin/students', [
             'students' => User::all([
-                'salon_id' => $_GET['salon_id'] ?? '',
-                'search'   => $_GET['search'] ?? '',
-                'role'     => 'student',
+                'salon_id'   => $_GET['salon_id'] ?? '',
+                'search'     => $_GET['search'] ?? '',
+                'role'       => 'student',
+                'teacher_id' => $teacherId,
             ]),
-            'salones' => Salon::all(),
-            'filters' => $_GET,
+            'salones'   => Salon::all($teacherId),
+            'filters'   => $_GET,
             'pageTitle' => 'Students',
         ]);
+    }
+
+    private function ownsStudentSalon(array $user): bool
+    {
+        $scope = $this->scope();
+        if ($scope === null) {
+            return true;
+        }
+        $salonId = (int) $user['salon_id'];
+        return $salonId > 0 && Salon::ownedBy($salonId, $scope);
     }
 
     public function studentSave(): void
@@ -271,6 +392,12 @@ class AdminController extends Controller
         $errors = [];
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = 'Invalid email.';
         if ($fn === '' || $ln === '') $errors[] = 'First name and surname are required.';
+        $salon = $salonId ? Salon::find($salonId) : null;
+        if (!$salon) {
+            $errors[] = 'Select a classroom for the student.';
+        } elseif ($this->scope() !== null && !Salon::ownedBy($salonId, $this->scope())) {
+            $errors[] = 'Select one of your own classrooms.';
+        }
         if (User::findByEmail($email)) $errors[] = 'That email already exists.';
 
         if ($errors) {
@@ -287,7 +414,7 @@ class AdminController extends Controller
             'password'   => password_hash($random, PASSWORD_DEFAULT),
             'role'       => 'student',
         ]);
-        SecurityLog::record($id, 'student_created', 'Student created by administrator: ' . $email, client_ip());
+        SecurityLog::record($id, 'student_created', 'Student created: ' . $email, client_ip());
         flash_set('success', 'Student created. Initial password: <strong>' . e($random) . '</strong> (must be changed on first sign-in).');
         redirect(base_url('admin/students'));
     }
@@ -298,14 +425,115 @@ class AdminController extends Controller
         csrf_check();
         $id   = (int) ($_POST['user_id'] ?? 0);
         $user = User::findById($id);
-        if (!$user || $user['role'] !== 'student') {
+        if (!$user || $user['role'] !== 'student' || !$this->ownsStudentSalon($user)) {
             flash_set('error', 'Student not found.');
             redirect(base_url('admin/students'));
         }
         $locked = User::toggleLock($id);
-        SecurityLog::record($id, $locked ? 'student_locked' : 'student_unlocked', 'Student status changed by the administrator', client_ip());
+        SecurityLog::record($id, $locked ? 'student_locked' : 'student_unlocked', 'Student status changed (' . ($this->isAdmin() ? 'admin' : 'teacher') . ')', client_ip());
         flash_set('success', $locked ? 'Student blocked.' : 'Student unblocked.');
         redirect(base_url('admin/students'));
+    }
+
+    public function studentDelete(): void
+    {
+        $this->guard();
+        $this->assertAdmin();
+        csrf_check();
+        $id    = (int) ($_POST['user_id'] ?? 0);
+        $user  = User::findById($id);
+        if (!$user || $user['role'] !== 'student') {
+            flash_set('error', 'Student not found.');
+            redirect(base_url('admin/students'));
+        }
+        User::deleteUser($id);
+        SecurityLog::record($this->uid(), 'student_deleted', 'Student deleted: ' . $user['email'], client_ip());
+        flash_set('success', 'Student <strong>' . e($user['first_name'] . ' ' . $user['last_name']) . '</strong> deleted along with their data.');
+        redirect(base_url('admin/students'));
+    }
+
+    // ------------------------------------------------------------------
+    // TEACHERS (admin only)
+    // ------------------------------------------------------------------
+    public function teachers(): void
+    {
+        $this->guard();
+        $this->assertAdmin();
+        $teachers = User::all(['role' => 'teacher']);
+        foreach ($teachers as &$t) {
+            $t['students_count'] = (int) Database::count(
+                "SELECT COUNT(*) AS c FROM users u JOIN salones s ON s.id = u.salon_id WHERE s.teacher_id = ? AND u.role = 'student'",
+                [(int) $t['id']]
+            );
+            $t['forums_count'] = (int) Database::count(
+                "SELECT COUNT(*) AS c FROM forums WHERE created_by = ?",
+                [(int) $t['id']]
+            );
+        }
+        unset($t);
+        $this->view('admin/teachers', [
+            'teachers'  => $teachers,
+            'pageTitle' => 'Teachers',
+        ]);
+    }
+
+    public function teacherDelete(): void
+    {
+        $this->guard();
+        $this->assertAdmin();
+        csrf_check();
+        $id     = (int) ($_POST['user_id'] ?? 0);
+        $user   = User::findById($id);
+        if (!$user || $user['role'] !== 'teacher') {
+            flash_set('error', 'Teacher not found.');
+            redirect(base_url('admin/teachers'));
+        }
+        User::deleteUser($id);
+        SecurityLog::record($this->uid(), 'teacher_deleted', 'Teacher deleted: ' . $user['email'], client_ip());
+        flash_set('success', 'Teacher <strong>' . e($user['first_name'] . ' ' . $user['last_name']) . '</strong> deleted along with their classrooms and forums.');
+        redirect(base_url('admin/teachers'));
+    }
+
+    // ------------------------------------------------------------------
+    // SETTINGS (domains)
+    // ------------------------------------------------------------------
+    public function settings(): void
+    {
+        $this->guard();
+        $this->view('admin/settings', [
+            'anyDomain'   => any_domain_allowed(),
+            'domains'     => allowed_domains(),
+            'pageTitle'   => 'Configuration',
+        ]);
+    }
+
+    public function settingsSave(): void
+    {
+        $this->guard();
+        csrf_check();
+
+        $anyDomain = isset($_POST['allow_any_domain']) ? '1' : '0';
+        Settings::set('allow_any_domain', $anyDomain);
+
+        // One domain per line; normalized without the leading '@'.
+        $rawDomains = preg_split('/[\r\n,]+/', trim((string) ($_POST['accepted_domains'] ?? '')));
+        $clean      = [];
+        foreach ($rawDomains as $d) {
+            $d = strtolower(trim($d));
+            $d = ltrim($d, '@');
+            if ($d === '' || strpos($d, '.') === false) {
+                continue;
+            }
+            if (filter_var($d, FILTER_VALIDATE_DOMAIN) !== false && strlen($d) <= 250) {
+                $clean[] = $d;
+            }
+        }
+        $clean = array_values(array_unique($clean));
+        Settings::set('accepted_domains', implode(',', $clean));
+
+        SecurityLog::record($this->uid(), 'settings_updated', 'Registration settings updated (any domain: ' . e($anyDomain) . ')', client_ip());
+        flash_set('success', 'Configuration saved. Accepted domains: <strong>' . ($clean ? e(implode(', ', $clean)) : 'none') . '</strong>.');
+        redirect(base_url('admin/settings'));
     }
 
     // ------------------------------------------------------------------
@@ -314,11 +542,22 @@ class AdminController extends Controller
     public function logs(): void
     {
         $this->guard();
+        $userIds = null;
+        if ($this->scope() !== null) {
+            $teacherId = $this->scope();
+            $students  = User::all(['role' => 'student', 'teacher_id' => $teacherId]);
+            $userIds   = array_merge([$teacherId], array_column($students, 'id'));
+        }
         $this->view('admin/logs', [
-            'logs'    => SecurityLog::all(['event' => $_GET['event'] ?? '', 'search' => $_GET['search'] ?? '']),
-            'filters' => $_GET,
+            'logs'    => SecurityLog::all([
+                'event'    => $_GET['event'] ?? '',
+                'search'   => $_GET['search'] ?? '',
+                'user_ids' => $userIds,
+            ]),
+            'filters'    => $_GET,
+            'scoped'     => $userIds !== null,
             'eventLabel' => [SecurityLog::class, 'eventLabel'],
-            'pageTitle' => 'Security Log / Audit',
+            'pageTitle'  => 'Security Log / Audit',
         ]);
     }
 
@@ -326,12 +565,68 @@ class AdminController extends Controller
     {
         $this->guard();
         $active = Forum::active();
+        $teacherScope = $this->scope();
+        $summary = [];
+        if ($active && ($teacherScope === null || (int) $active['created_by'] === $teacherScope)) {
+            $summary = Response::partnerJoinedActions((int) $active['id']);
+        }
         $this->view('admin/responses', [
-            'responses' => Response::allFiltered(['type' => $_GET['type'] ?? '', 'search' => $_GET['search'] ?? '']),
-            'summary'   => $active ? Response::partnerJoinedActions((int) $active['id']) : [],
-            'filters'   => $_GET,
+            'responses'   => Response::allFiltered([
+                'type'       => $_GET['type'] ?? '',
+                'search'     => $_GET['search'] ?? '',
+                'teacher_id' => $teacherScope,
+            ]),
+            'summary'     => $summary,
+            'filters'     => $_GET,
             'activeForum' => $active,
-            'pageTitle' => 'Forum Responses',
+            'pageTitle'   => 'Forum Responses',
         ]);
+    }
+
+    public function responseDelete(): void
+    {
+        $this->guard();
+        $this->assertAdmin();
+        csrf_check();
+        $id  = (int) ($_POST['response_id'] ?? 0);
+        $row = Database::fetchOne("SELECT r.*, u.first_name, u.last_name, f.title AS forum_title
+                                   FROM responses r
+                                   JOIN users u ON u.id = r.user_id
+                                   LEFT JOIN forums f ON f.id = r.forum_id
+                                   WHERE r.id = ? LIMIT 1", [$id]);
+        if (!$row) {
+            flash_set('error', 'Response not found.');
+            redirect(base_url('admin/responses'));
+        }
+        Response::delete($id);
+        SecurityLog::record($this->uid(), 'response_deleted', 'Response ' . $id . ' deleted (author: ' . $row['email'] . ')', client_ip());
+        flash_set('success', 'Response deleted.');
+        redirect(base_url('admin/responses'));
+    }
+
+    public function logDelete(): void
+    {
+        $this->guard();
+        $this->assertAdmin();
+        csrf_check();
+        $id = (int) ($_POST['log_id'] ?? 0);
+        if (!SecurityLog::find($id)) {
+            flash_set('error', 'Log entry not found.');
+            redirect(base_url('admin/logs'));
+        }
+        SecurityLog::delete($id);
+        flash_set('success', 'Log entry deleted.');
+        redirect(base_url('admin/logs'));
+    }
+
+    public function logsClear(): void
+    {
+        $this->guard();
+        $this->assertAdmin();
+        csrf_check();
+        SecurityLog::clear();
+        SecurityLog::record($this->uid(), 'logs_cleared', 'Security log cleared by the administrator', client_ip());
+        flash_set('success', 'Security log cleared.');
+        redirect(base_url('admin/logs'));
     }
 }
