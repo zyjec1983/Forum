@@ -1,0 +1,183 @@
+/* ============================================================
+   Foro Académico ECOMUNDO · estilos globales
+   ============================================================ */
+:root {
+    --app-dark: #0f172a;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: #f1f5f9;
+    min-height: 100vh;
+}
+
+.leading-relaxed { line-height: 1.7; }
+
+/* Barra de navegación */
+.app-navbar { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); }
+.app-navbar .navbar-brand { letter-spacing: 0.2px; }
+
+/* ---------- Avatares ---------- */
+.avatar {
+    width: 2.5rem; height: 2.5rem;
+    border-radius: 9999px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 0.8rem;
+    flex-shrink: 0; letter-spacing: 0.03em;
+}
+.avatar-xs { width: 1.75rem; height: 1.75rem; font-size: 0.6rem; }
+.avatar-sm { width: 2rem;  height: 2rem;  font-size: 0.65rem; }
+.avatar-md { width: 2.9rem; height: 2.9rem; font-size: 0.85rem; }
+.avatar-lg { width: 3.6rem; height: 3.6rem; font-size: 1.05rem; }
+
+.avatar-dark   { background: #0f172a; }
+.avatar-emerald{ background: #059669; }
+.avatar-slate  { background: #64748b; }
+.avatar-white  { background: #fff; color: #0f172a; }
+
+.bg-emerald { background: #059669; }
+.bg-indigo  { background: #4f46e5; }
+.bg-teal    { background: #0d9488; }
+.bg-violet  { background: #7c3aed; }
+.bg-rose    { background: #e11d48; }
+.bg-sky     { background: #0284c7; }
+.bg-orange  { background: #ea580c; }
+.bg-cyan    { background: #0891b2; }
+
+/* ---------- Foro: tarjetas ---------- */
+.student-card { border-radius: 1rem; overflow: hidden; }
+.student-card.border-start { border-left-width: 5px !important; }
+
+/* Burbuja tipo WhatsApp */
+.chat-bubble {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.9rem;
+    padding: 0.6rem 0.85rem;
+}
+.sub-reply.own .chat-bubble {
+    background: #e9f5ff;
+    border-color: #b9d9f8;
+}
+
+/* Marcos de interacción */
+.partner-form textarea { resize: vertical; }
+
+.teacher-question { border-top: 5px solid #0d6efd; }
+
+/* ---------- Panel admin ---------- */
+.admin-aside .admin-link {
+    display: flex; align-items: center;
+    padding: 0.6rem 0.85rem;
+    border-radius: 0.6rem;
+    color: #334155;
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.admin-aside .admin-link:hover { background: #eef2ff; color: #1d4ed8; }
+.admin-aside .admin-link.active { background: #1d4ed8; color: #fff; }
+
+.stat-card { border-radius: 0.9rem; }
+.stat-card .fs-4 { color: #1d4ed8; }
+
+/* ---------- Security: selection lock in the forum ---------- */
+.forum-lock,
+.forum-lock * {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+}
+.forum-lock img, .forum-lock textarea {
+    -webkit-user-drag: none;
+}
+.forum-lock textarea,
+.forum-lock input {
+    -webkit-touch-callout: none;
+}
+
+/* Anti-screenshot watermark */
+.screen-watermark {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #0f172a;
+    opacity: 0.05;
+    pointer-events: none;
+    z-index: 1030;
+    transform: rotate(-28deg);
+    letter-spacing: 1px;
+    white-space: nowrap;
+}
+
+/* Classroom assignment checkboxes (admin: create / edit forum) */
+.classroom-checkbox-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.75rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.625rem;
+    background: #fff;
+}
+.classroom-checkbox-group .form-check {
+    margin: 0;
+    padding-left: 1.5rem;
+}
+
+/* Full-screen shield shown when a screen-capture attempt is detected: the
+   cover stays and the student is forced to close the session. */
+.capture-shield {
+    position: fixed;
+    inset: 0;
+    display: none;
+    z-index: 99999;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 2rem;
+    background: #0f172a;
+    color: #fff;
+    font-size: 1.15rem;
+    font-weight: 600;
+    line-height: 1.6;
+}
+.capture-shield.visible { display: flex; }
+.capture-shield .shield-title {
+    display: block;
+    font-size: 1.35rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+}
+.capture-shield .shield-msg {
+    display: block;
+    font-size: 1rem;
+    font-weight: 500;
+    opacity: 0.9;
+    margin-bottom: 1rem;
+}
+.capture-shield .shield-logout { margin-top: 0.5rem; }
+
+/* Clave temporal de recuperación */
+.recover-key {
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.3em;
+    color: #14532d;
+}
+
+/* Wrapper del foro */
+#forum-app { max-width: 900px; margin: 0 auto; }
+
+.window-banner .card-body { background: #ffffff; }
+
+@media (max-width: 575.98px) {
+    .avatar-md { width: 2.4rem; height: 2.4rem; font-size: 0.7rem; }
+}
