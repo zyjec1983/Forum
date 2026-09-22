@@ -38,7 +38,7 @@ CREATE TABLE `salones` (
     CONSTRAINT `fk_salones_teacher` FOREIGN KEY (`teacher_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- Users (students, teachers and the administrator)
+-- Users (students, teachers, guests and the administrator)
 CREATE TABLE `users` (
     `id`              INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `email`           VARCHAR(190) NOT NULL,
@@ -46,7 +46,7 @@ CREATE TABLE `users` (
     `last_name`       VARCHAR(60)  NOT NULL,
     `salon_id`        INT UNSIGNED NULL,
     `password`        VARCHAR(255) NOT NULL,
-    `role`            ENUM('student','teacher','admin') NOT NULL DEFAULT 'student',
+    `role`            ENUM('student','teacher','admin','guest') NOT NULL DEFAULT 'student',
     `failed_attempts` TINYINT UNSIGNED NOT NULL DEFAULT 0,
     `locked`          TINYINT(1) NOT NULL DEFAULT 0,
     `created_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

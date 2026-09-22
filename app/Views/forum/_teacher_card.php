@@ -9,6 +9,7 @@ $__owner   = ($response['first_name'] ?? '') . ' ' . ($response['last_name'] ?? 
 $isSelf    = $isSelf ?? false;
 $canReply  = $canReply ?? true;
 $__isAdmin = (current_user()['role'] ?? '') === 'admin';
+$__isGuest = (current_user()['role'] ?? '') === 'guest';
 $__userId  = (int) (current_user()['id'] ?? 0);
 ?>
 <div class="card student-card border-0 shadow-sm mb-4 <?= $isSelf ? 'border-start border-4 border-primary' : '' ?>" data-response-id="<?= (int) $response['id'] ?>">
@@ -53,7 +54,7 @@ $__userId  = (int) (current_user()['id'] ?? 0);
                             </div>
                         </div>
                     </div>
-                <?php elseif (!$__isAdmin): ?>
+                <?php elseif (!$__isAdmin && !$__isGuest): ?>
                     <div class="mt-2">
                         <span class="badge text-bg-light text-secondary border">Interaction closed</span>
                     </div>

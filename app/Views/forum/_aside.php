@@ -6,11 +6,12 @@
 $__assigned  = $assigned ?? [];
 $__activeId  = (int) ($activeForumId ?? 0);
 $__currentId = (int) ($currentForumId ?? 0);
+$__guest     = (current_user()['role'] ?? '') === 'guest';
 ?>
 <aside>
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-header bg-white fw-bold small d-flex align-items-center gap-2">
-            <i class="bi bi-collection me-1"></i> My forums
+            <i class="bi bi-collection me-1"></i> <?= $__guest ? 'Classroom forums (view)' : 'My forums' ?>
             <span class="badge rounded-pill text-bg-light text-secondary border ms-auto"><?= count($__assigned) ?></span>
         </div>
         <?php if (!$__assigned): ?>

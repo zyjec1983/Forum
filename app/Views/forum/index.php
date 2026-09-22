@@ -1,5 +1,6 @@
 <?php
 $__isStaff = in_array($user['role'] ?? '', ['admin', 'teacher'], true);
+$__isGuest = ($user['role'] ?? '') === 'guest';
 $__isAdmin = ($user['role'] ?? '') === 'admin';
 $__openTs  = strtotime($forum['open_at']);
 $__closeTs = strtotime($forum['close_at']);
@@ -14,7 +15,9 @@ $__interactive = ($interactive ?? false) && !$__isStaff;
             <?= e(APP_NAME) ?>
         </a>
         <div class="d-flex align-items-center gap-2 ms-auto">
-            <?php if ($__isStaff): ?>
+            <?php if ($__isGuest): ?>
+                <span class="badge text-bg-warning small"><i class="bi bi-eye me-1"></i>Guest view</span>
+            <?php elseif ($__isStaff): ?>
                 <a href="<?= e(base_url('admin')) ?>" class="btn btn-sm btn-outline-light"><?= $__isAdmin ? 'Admin Panel' : 'My panel' ?></a>
             <?php endif; ?>
             <div class="dropdown">
@@ -54,7 +57,12 @@ $__interactive = ($interactive ?? false) && !$__isStaff;
             <div class="col-12 col-lg-9">
         <?php include APP_PATH . '/Views/shared/_flash.php'; ?>
 
-        <?php if (!$__interactive && !$__isStaff): ?>
+        <?php if ($__isGuest): ?>
+            <div class="alert alert-warning small py-2">
+                <i class="bi bi-eye me-1"></i>
+                You are viewing this forum in <strong>read-only mode</strong> as an invited guest. You cannot participate.
+            </div>
+        <?php elseif (!$__interactive && !$__isStaff): ?>
             <div class="alert alert-info small py-2">
                 <i class="bi bi-info-circle me-1"></i>
                 This forum is shown <strong>read-only</strong>: only the currently active forum accepts participation.
@@ -195,8 +203,13 @@ $__interactive = ($interactive ?? false) && !$__isStaff;
             <?php endif; ?>
 
             <p class="text-center small text-secondary mt-4 mb-0">
-                <i class="bi bi-shield-lock me-1"></i>
-                This forum blocks copy, cut, paste, text selection and screenshots. Any attempt is logged with user, date/time and IP.
+                <?php if ($__isGuest): ?>
+                    <i class="bi bi-eye me-1"></i>
+                    Read-only guest view. Participation is not allowed from your profile.
+                <?php else: ?>
+                    <i class="bi bi-shield-lock me-1"></i>
+                    This forum blocks copy, cut, paste, text selection and screenshots. Any attempt is logged with user, date/time and IP.
+                <?php endif; ?>
             </p>
             </div>
             </div>
@@ -205,6 +218,6 @@ $__interactive = ($interactive ?? false) && !$__isStaff;
 </div>
 
 <?php
-$scripts = ['security', 'forum'];
+$scripts = $__isGuest ? ['forum'] : ['security', 'forum'];
 include APP_PATH . '/Views/shared/_foot.php';
 ?>

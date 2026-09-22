@@ -453,6 +453,107 @@ class AdminController extends Controller
     }
 
     // ------------------------------------------------------------------
+    // INVITED ACCOUNTS (guest -> read-only access for parents/auditors)
+    // ------------------------------------------------------------------
+    public function guests(): void
+    {
+        $this->guard();
+        $teacherId = $this->scope();
+        $this->view('admin/guests', [
+            'guests'    => User::all([
+                'search'     => $_GET['search'] ?? '',
+                'role'       => 'guest',
+                'teacher_id' => $teacherId,
+            ]),
+            'salones'   => Salon::all($teacherId),
+            'filters'   => $_GET,
+            'pageTitle' => 'Guest Accounts',
+        ]);
+    }
+
+    private function ownsGuestSalon(array $user): bool
+    {
+        $scope = $this->scope();
+        if ($scope === null) {
+            return true;
+        }
+        $salonId = (int) $user['salon_id'];
+        return $salonId > 0 && Salon::ownedBy($salonId, $scope);
+    }
+
+    public function guestSave(): void
+    {
+        $this->guard();
+        csrf_check();
+        $email   = mb_strtolower(trim($_POST['email'] ?? ''));
+        $fn      = trim($_POST['first_name'] ?? '');
+        $ln      = trim($_POST['last_name'] ?? '');
+        $pass    = (string) ($_POST['password'] ?? '');
+        $salonId = (int) ($_POST['salon_id'] ?? 0);
+
+        $errors = [];
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = 'Enter a valid email.';
+        if ($fn === '') $errors[] = 'Enter a name for the guest (e.g. "Parent of Ana").';
+        if (mb_strlen($pass) < 6) $errors[] = 'The password must be at least 6 characters long.';
+        $salon = $salonId ? Salon::find($salonId) : null;
+        if (!$salon) {
+            $errors[] = 'Select the classroom the guest will be able to view.';
+        } elseif ($this->scope() !== null && !Salon::ownedBy($salonId, $this->scope())) {
+            $errors[] = 'Select one of your own classrooms.';
+        }
+        if (User::findByEmail($email)) $errors[] = 'That email already exists.';
+
+        if ($errors) {
+            flash_set('error', implode('<br>', array_map('e', $errors)));
+            redirect(base_url('admin/guests'));
+        }
+
+        $id = User::create([
+            'email'      => $email,
+            'first_name' => $fn,
+            'last_name'  => $ln,
+            'salon_id'   => $salonId,
+            'password'   => password_hash($pass, PASSWORD_DEFAULT),
+            'role'       => 'guest',
+        ]);
+        SecurityLog::record($id, 'guest_created', 'Guest account created: ' . $email, client_ip());
+        flash_set('success', 'Guest account <strong>' . e($email) . '</strong> created (classroom <strong>' . e($salon['name']) . '</strong>). Share the email and password with the parent or auditor.');
+        redirect(base_url('admin/guests'));
+    }
+
+    public function guestToggle(): void
+    {
+        $this->guard();
+        csrf_check();
+        $id   = (int) ($_POST['user_id'] ?? 0);
+        $user = User::findById($id);
+        if (!$user || $user['role'] !== 'guest' || !$this->ownsGuestSalon($user)) {
+            flash_set('error', 'Guest account not found.');
+            redirect(base_url('admin/guests'));
+        }
+        $locked = User::toggleLock($id);
+        SecurityLog::record($id, $locked ? 'guest_locked' : 'guest_unlocked', 'Guest status changed (' . ($this->isAdmin() ? 'admin' : 'teacher') . ')', client_ip());
+        flash_set('success', $locked ? 'Guest account blocked.' : 'Guest account unblocked.');
+        redirect(base_url('admin/guests'));
+    }
+
+    public function guestDelete(): void
+    {
+        $this->guard();
+        csrf_check();
+        $id   = (int) ($_POST['user_id'] ?? 0);
+        $user = User::findById($id);
+        if (!$user || $user['role'] !== 'guest' || !$this->ownsGuestSalon($user)) {
+            flash_set('error', 'Guest account not found.');
+            redirect(base_url('admin/guests'));
+        }
+        User::deleteUser($id);
+        SecurityLog::record($this->uid(), 'guest_deleted', 'Guest account deleted: ' . $user['email'], client_ip());
+        flash_set('success', 'Guest account <strong>' . e($user['email']) . '</strong> deleted.');
+        redirect(base_url('admin/guests'));
+    }
+
+    // ------------------------------------------------------------------
     // TEACHERS (admin only)
     // ------------------------------------------------------------------
     public function teachers(): void
@@ -546,7 +647,8 @@ class AdminController extends Controller
         if ($this->scope() !== null) {
             $teacherId = $this->scope();
             $students  = User::all(['role' => 'student', 'teacher_id' => $teacherId]);
-            $userIds   = array_merge([$teacherId], array_column($students, 'id'));
+            $guests    = User::all(['role' => 'guest', 'teacher_id' => $teacherId]);
+            $userIds   = array_merge([$teacherId], array_column($students, 'id'), array_column($guests, 'id'));
         }
         $this->view('admin/logs', [
             'logs'    => SecurityLog::all([

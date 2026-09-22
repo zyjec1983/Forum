@@ -1,5 +1,6 @@
 <?php
 $__isStaff = in_array($user['role'] ?? '', ['admin', 'teacher'], true);
+$__isGuest = ($user['role'] ?? '') === 'guest';
 $__isAdmin = ($user['role'] ?? '') === 'admin';
 $__hasAssigned = !empty($assigned);
 ?>
@@ -9,7 +10,9 @@ $__hasAssigned = !empty($assigned);
     <div class="container-lg">
         <a class="navbar-brand fw-bold small" href="<?= e(base_url('/')) ?>"><?= e(APP_NAME) ?></a>
         <div class="d-flex align-items-center gap-2 ms-auto">
-            <?php if ($__isStaff): ?>
+            <?php if ($__isGuest): ?>
+                <span class="badge text-bg-warning small"><i class="bi bi-eye me-1"></i>Guest view</span>
+            <?php elseif ($__isStaff): ?>
                 <a href="<?= e(base_url('admin')) ?>" class="btn btn-sm btn-outline-light"><?= $__isAdmin ? 'Admin Panel' : 'My panel' ?></a>
             <?php endif; ?>
             <a href="<?= e(base_url('auth/logout')) ?>" class="btn btn-sm btn-light">Sign out</a>
@@ -36,6 +39,10 @@ $__hasAssigned = !empty($assigned);
                     <?php if ($__isAdmin): ?>
                         <p class="text-secondary small mb-4">Create a forum, assign it to one or more classrooms and open its participation window.</p>
                         <a href="<?= e(base_url('admin/forum')) ?>" class="btn btn-primary btn-sm fw-bold">Create / activate forum</a>
+                    <?php elseif ($__isGuest): ?>
+                        <p class="text-secondary small mb-4">
+                            The classroom you are auditing has no active forums at the moment. Come back later.
+                        </p>
                     <?php elseif ($__hasAssigned): ?>
                         <p class="text-secondary small mb-4">
                             The forums of your classroom are not configured as active yet. Use the <strong>My forums</strong>
@@ -53,6 +60,6 @@ $__hasAssigned = !empty($assigned);
 </div>
 
 <?php
-$scripts = ['security'];
+$scripts = $__isGuest ? [] : ['security'];
 include APP_PATH . '/Views/shared/_foot.php';
 ?>

@@ -28,6 +28,7 @@ $__isAdminRole = $__role === 'admin';
                         <a href="<?= e(base_url('admin/forum')) ?>" class="admin-link <?= $__active === 'forum' ? 'active' : '' ?>"><i class="bi bi-chat-square-text me-2"></i>Forum Management</a>
                         <a href="<?= e(base_url('admin/salones')) ?>" class="admin-link <?= $__active === 'salones' ? 'active' : '' ?>"><i class="bi bi-mortarboard me-2"></i>Classrooms</a>
                         <a href="<?= e(base_url('admin/students')) ?>" class="admin-link <?= $__active === 'students' ? 'active' : '' ?>"><i class="bi bi-people me-2"></i>Students</a>
+                        <a href="<?= e(base_url('admin/guests')) ?>" class="admin-link <?= $__active === 'guests' ? 'active' : '' ?>"><i class="bi bi-incognito me-2"></i>Guest Accounts</a>
                         <a href="<?= e(base_url('admin/responses')) ?>" class="admin-link <?= $__active === 'responses' ? 'active' : '' ?>"><i class="bi bi-chat-left-dots me-2"></i>Forum Responses</a>
                         <a href="<?= e(base_url('admin/logs')) ?>" class="admin-link <?= $__active === 'logs' ? 'active' : '' ?>"><i class="bi bi-shield-lock me-2"></i>Security / Audit</a>
                         <?php if ($__isAdminRole): ?>

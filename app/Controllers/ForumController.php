@@ -49,6 +49,12 @@ class ForumController extends Controller
             return;
         }
 
+        // Only students participate. Guests, teachers and the admin view the
+        // forum in read-only mode (guests are invited accounts for viewing).
+        if (($user['role'] ?? '') !== 'student') {
+            $interactive = false;
+        }
+
         $cards = [];
         foreach (Response::teacherResponses((int) $forum['id']) as $response) {
             $cards[] = [

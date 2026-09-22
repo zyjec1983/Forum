@@ -6,7 +6,7 @@ window, classroom assignment, and a full security audit log.
 
 ## Features
 
-- **Three roles** – `student` (participates in forums), `teacher` (self-registers and manages their own classrooms, forums and students), `admin` (super-administrator with full control and deletion rights).
+- **Four roles** – `student` (participates in forums), `guest` (invited parent/auditor, read-only view), `teacher` (self-registers and manages their own classrooms, forums and students), `admin` (super-administrator with full control and deletion rights).
 - **Student data capture & authentication** – registration accepts only the configured institutional domains (e.g. `@ecomundo.edu.ec`); the list is editable in Configuration; accounts are locked after repeated failed sign-ins.
 - **Teacher accounts** – self-registration with its own form (Soy estudiante / Soy docente); teachers own the classrooms they create and only see their students, forums and audit entries.
 - **Forum management** – create, edit, re-open, activate and delete forums; each forum defines a time window (`open_at` / `close_at`).
@@ -17,6 +17,7 @@ window, classroom assignment, and a full security audit log.
 - **Screen-capture shield** – a synchronous full-screen shield covers the page on any capture attempt (PrtSc, snip tool, window/tab switch), the screenshot shows black, the clipboard is wiped (best-effort), and the student's session is force-closed.
 - **Security audit** – `security_logs` records logins, lockouts, time-window violations, hacking attempts and all blocked actions; browsable from the panel. The super-administrator can delete individual entries or clear the whole log.
 - **Configuration (domains)** – super-admin and teachers can toggle "accept any domain" and edit the list of accepted email domains.
+- **Guest accounts (read-only)** – teachers create invited accounts (`guest` role) with a fictitious email + password, bound to one of their classrooms, to hand out to parents or auditors. Guests sign in and see the same student views but with no interaction: no responses, no conclusion, no admin panel, and no anti-cheat shield.
 
 ## Tech stack
 
@@ -57,6 +58,7 @@ their own classrooms, students, forums and audit entries. The **Teachers** secti
 - **Forum Management** (`/admin/forum`): create a forum (title, subject, question, time window) and tick the classrooms that will participate. Use **Edit** to change any forum or its classroom assignment, **Re-open** to extend an expired window, and **Activate** to make a forum the active one (only one active forum at a time). The admin can also **Delete** a forum.
 - **Classrooms** (`/admin/salones`): manage the classrooms (salons) that students belong to. Teachers create their own classrooms; the admin can assign an owner.
 - **Students** (`/admin/students`): register students and assign them to a classroom; block/unblock accounts. The admin can delete students permanently.
+- **Guest Accounts** (`/admin/guests`): create a guest account with any email + password and select the classroom it will be able to view. Teachers manage the guests of their own classrooms (lock/unlock/delete); the admin manages all guests.
 - **Teachers** (`/admin/teachers`, admin only): list teacher accounts and delete them along with their classrooms, forums and data.
 - **Configuration** (`/admin/settings`): toggle "accept any domain" and edit the list of accepted domains for student and teacher registration.
 - **Responses** (`/admin/responses`): review all participations and the partner-reply summary; the admin can delete individual responses.
@@ -67,6 +69,18 @@ their own classrooms, students, forums and audit entries. The **Teachers** secti
 The sign-in page offers both **Soy estudiante / Create account** and **Soy docente / Teacher account**.
 A teacher account is created with the same accepted-domain rule and signs in directly to the
 panel, where it can create classrooms and forums for its students.
+
+## Guest accounts (parents / auditors)
+
+From **Guest Accounts** (`/admin/guests`) a teacher creates an invited account with a fictitious
+email and a password, bound to one of the classrooms they own. The credentials are shared with the
+parent or auditor, who signs in on the normal page and is redirected to the student forum view of
+that classroom **in read-only mode**:
+
+- They see the classroom's forums (same "My forums" sidebar) and any forum contents.
+- There is no response form, no final conclusion box and no admin panel; server-side rules reject any participation attempt by a guest.
+- The anti-cheat shield is **not** applied to guests, so they can legally view or capture the screen.
+- Teachers can block/unblock and delete their own guest accounts; the administrator manages all of them.
 
 ## Project structure
 
