@@ -115,6 +115,19 @@ body {
     padding-left: 1.5rem;
 }
 
+/* Admin appearance: login wallpaper backdrop */
+.auth-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background-size: cover;
+    background-position: center;
+}
+.auth-content {
+    position: relative;
+    z-index: 1;
+}
+
 /* Clave temporal de recuperación */
 .recover-key {
     font-family: 'Courier New', monospace;

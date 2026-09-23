@@ -8,6 +8,7 @@ $__pageTitle = $pageTitle ?? APP_NAME;
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= e($__pageTitle) ?> · <?= e(APP_NAME) ?></title>
+    <?= favicon_tag() ?>
     <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
     <meta name="base-url" content="<?= e(BASE_URL) ?>">
     <meta name="color-scheme" content="light">

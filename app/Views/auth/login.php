@@ -1,6 +1,10 @@
 <?php include APP_PATH . '/Views/shared/_head.php'; ?>
 
-<div class="container py-5">
+<?php if (login_wallpaper_url()): ?>
+    <div class="auth-backdrop" style="background-image:url('<?= e(login_wallpaper_url()) ?>')"></div>
+<?php endif; ?>
+
+<div class="container py-5 auth-content">
     <div class="row justify-content-center">
         <div class="col-12 col-md-8 col-lg-5 col-xl-4">
             <div class="text-center mb-4">

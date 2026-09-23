@@ -603,6 +603,9 @@ class AdminController extends Controller
         $this->view('admin/settings', [
             'anyDomain'   => any_domain_allowed(),
             'domains'     => allowed_domains(),
+            'images'      => $this->mediaFiles(),
+            'wallpaper'   => (string) Settings::get('login_wallpaper', ''),
+            'favicon'     => (string) Settings::get('favicon', ''),
             'pageTitle'   => 'Configuration',
         ]);
     }
@@ -633,6 +636,146 @@ class AdminController extends Controller
 
         SecurityLog::record($this->uid(), 'settings_updated', 'Registration settings updated (any domain: ' . e($anyDomain) . ')', client_ip());
         flash_set('success', 'Configuration saved. Accepted domains: <strong>' . ($clean ? e(implode(', ', $clean)) : 'none') . '</strong>.');
+        redirect(base_url('admin/settings'));
+    }
+
+    // ------------------------------------------------------------------
+    // SETTINGS (appearance: login wallpaper + favicon)
+    // ------------------------------------------------------------------
+    private const MEDIA_TARGETS = ['wallpaper' => 'login_wallpaper', 'favicon' => 'favicon'];
+    private const IMG_EXTS      = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'];
+    private const MAX_IMG_BYTES = 4194304; // 4 MB
+
+    private function imgDir(): string
+    {
+        $dir = PUBLIC_PATH . DS . 'img';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+        return $dir;
+    }
+
+    /** Images already stored in /public/img (for the folder picker). */
+    private function mediaFiles(): array
+    {
+        $files = [];
+        foreach (glob($this->imgDir() . DS . '*') ?: [] as $abs) {
+            if (!is_file($abs)) {
+                continue;
+            }
+            $name = basename($abs);
+            if (!in_array(strtolower(pathinfo($name, PATHINFO_EXTENSION)), self::IMG_EXTS, true)) {
+                continue;
+            }
+            $files[] = [
+                'name' => $name,
+                'url'  => asset('img/' . rawurlencode($name)),
+                'size' => file_size_text((int) filesize($abs)),
+            ];
+        }
+        usort($files, function ($a, $b) { return strcmp($a['name'], $b['name']); });
+        return $files;
+    }
+
+    private function assertMediaTarget(string $target): string
+    {
+        if (!isset(self::MEDIA_TARGETS[$target])) {
+            flash_set('error', 'Invalid appearance setting.');
+            redirect(base_url('admin/settings'));
+        }
+        return self::MEDIA_TARGETS[$target];
+    }
+
+    /** Upload an image from the device to /public/img and apply it. */
+    public function settingsUploadImage(): void
+    {
+        $this->guard();
+        $this->assertAdmin();
+        csrf_check();
+
+        $key = $this->assertMediaTarget((string) ($_POST['target'] ?? ''));
+        $file = $_FILES['image'] ?? null;
+
+        if ($file === null || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || (int) $file['size'] <= 0) {
+            flash_set('error', 'No image was received. Choose a file first.');
+            redirect(base_url('admin/settings'));
+        }
+        if ((int) $file['size'] > self::MAX_IMG_BYTES) {
+            flash_set('error', 'The image exceeds the 4 MB limit.');
+            redirect(base_url('admin/settings'));
+        }
+
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, self::IMG_EXTS, true)) {
+            flash_set('error', 'Only JPG, PNG, WEBP, GIF or SVG images are allowed.');
+            redirect(base_url('admin/settings'));
+        }
+
+        if ($ext === 'svg') {
+            $content = strtolower((string) file_get_contents($file['tmp_name']));
+            if (strpos($content, '<script') !== false || strpos($content, 'onload=') !== false
+                || strpos($content, 'onerror=') !== false || strpos($content, 'javascript:') !== false) {
+                flash_set('error', 'The SVG file contains unsafe content and was rejected.');
+                redirect(base_url('admin/settings'));
+            }
+        } elseif (@getimagesize($file['tmp_name']) === false) {
+            flash_set('error', 'The file is not a valid image.');
+            redirect(base_url('admin/settings'));
+        }
+
+        $name = $key . '-' . date('Ymd-His') . '-' . bin2hex(random_bytes(3)) . '.' . $ext;
+        if (!move_uploaded_file($file['tmp_name'], $this->imgDir() . DS . $name)) {
+            flash_set('error', 'Could not save the image. Check the permissions of /public/img.');
+            redirect(base_url('admin/settings'));
+        }
+
+        Settings::set($key, $name);
+        SecurityLog::record($this->uid(), 'settings_updated', ($key === 'login_wallpaper' ? 'Login wallpaper' : 'Favicon') . ' changed to ' . $name, client_ip());
+        flash_set('success', 'Image uploaded and applied.');
+        redirect(base_url('admin/settings'));
+    }
+
+    /** Apply an image that already exists in /public/img. */
+    public function settingsPickImage(): void
+    {
+        $this->guard();
+        $this->assertAdmin();
+        csrf_check();
+
+        $key  = $this->assertMediaTarget((string) ($_POST['target'] ?? ''));
+        $name = (string) ($_POST['image'] ?? '');
+
+        if ($name === '' || basename($name) !== $name) {
+            flash_set('error', 'Invalid image name.');
+            redirect(base_url('admin/settings'));
+        }
+        $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+        if (!in_array($ext, self::IMG_EXTS, true)) {
+            flash_set('error', 'That file is not an allowed image.');
+            redirect(base_url('admin/settings'));
+        }
+        if (!is_file($this->imgDir() . DS . $name)) {
+            flash_set('error', 'The image no longer exists in /public/img.');
+            redirect(base_url('admin/settings'));
+        }
+
+        Settings::set($key, $name);
+        SecurityLog::record($this->uid(), 'settings_updated', ($key === 'login_wallpaper' ? 'Login wallpaper' : 'Favicon') . ' changed to ' . $name, client_ip());
+        flash_set('success', 'Image applied.');
+        redirect(base_url('admin/settings'));
+    }
+
+    /** Restore the default appearance (no custom wallpaper / favicon). */
+    public function settingsRemoveImage(): void
+    {
+        $this->guard();
+        $this->assertAdmin();
+        csrf_check();
+
+        $key = $this->assertMediaTarget((string) ($_POST['target'] ?? ''));
+        Settings::set($key, '');
+        SecurityLog::record($this->uid(), 'settings_updated', ($key === 'login_wallpaper' ? 'Login wallpaper' : 'Favicon') . ' restored to default', client_ip());
+        flash_set('success', 'Default restored.');
         redirect(base_url('admin/settings'));
     }
 

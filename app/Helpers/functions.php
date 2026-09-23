@@ -182,6 +182,44 @@ function domain_allowed(string $email): bool
     return Settings::emailDomainAllowed($email);
 }
 
+// ------------------------------------------------
+// Login wallpaper / favicon (admin appearance settings)
+// ------------------------------------------------
+/** URL of the configured login wallpaper, or null when using the default. */
+function login_wallpaper_url(): ?string
+{
+    $file = (string) Settings::get('login_wallpaper', '');
+    return $file !== '' ? asset('img/' . rawurlencode($file)) : null;
+}
+
+/** Human readable file size (for the image picker). */
+function file_size_text(int $bytes): string
+{
+    if ($bytes >= 1048576) return round($bytes / 1048576, 1) . ' MB';
+    if ($bytes >= 1024)    return round($bytes / 1024) . ' KB';
+    return $bytes . ' B';
+}
+
+/** <link rel="icon"> for the configured favicon (or an empty string). */
+function favicon_tag(): string
+{
+    $file = (string) Settings::get('favicon', '');
+    if ($file === '') {
+        return '';
+    }
+    $ext  = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+    $mime = [
+        'ico' => 'image/x-icon',
+        'png' => 'image/png',
+        'svg' => 'image/svg+xml',
+        'jpg' => 'image/jpeg',
+        'jpeg'=> 'image/jpeg',
+        'webp'=> 'image/webp',
+        'gif' => 'image/gif',
+    ][$ext] ?? 'image/png';
+    return '<link rel="icon" type="' . e($mime) . '" href="' . e(asset('img/' . rawurlencode($file))) . '">';
+}
+
 function json_out(array $data, int $code = 200): void
 {
     http_response_code($code);
