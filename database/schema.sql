@@ -9,6 +9,10 @@
 --       so it works even when the user has rights over one DB only.
 --
 --  This file is idempotent: it drops and recreates the 7 tables.
+--  Tables are created WITHOUT foreign keys and all constraints are
+--  added at the end with ALTER TABLE, so the import works even when
+--  phpMyAdmin keeps "Enable foreign key checks" enabled and with
+--  circular references (salones <-> users).
 --  Seed data: settings, 5 example classrooms, the administrator
 --  (admin@ecomundo.edu.ec / Admin@2026) and, as an OPTIONAL sample,
 --  one active forum assigned to all classrooms.
@@ -16,7 +20,6 @@
 -- ============================================================
 
 SET NAMES utf8mb4;
-SET FOREIGN_KEY_CHECKS = 0;
 
 DROP TABLE IF EXISTS `security_logs`;
 DROP TABLE IF EXISTS `responses`;
@@ -45,8 +48,7 @@ CREATE TABLE `salones` (
     `created_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uq_salones_name` (`name`),
-    KEY `fk_salones_teacher` (`teacher_id`),
-    CONSTRAINT `fk_salones_teacher` FOREIGN KEY (`teacher_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+    KEY `idx_salones_teacher` (`teacher_id`)
 ) ENGINE=InnoDB;
 
 -- ------------------------------------------------------------
@@ -65,8 +67,7 @@ CREATE TABLE `users` (
     `created_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uq_users_email` (`email`),
-    KEY `fk_users_salon` (`salon_id`),
-    CONSTRAINT `fk_users_salon` FOREIGN KEY (`salon_id`) REFERENCES `salones` (`id`) ON DELETE SET NULL
+    KEY `idx_users_salon` (`salon_id`)
 ) ENGINE=InnoDB;
 
 -- ------------------------------------------------------------
@@ -83,8 +84,7 @@ CREATE TABLE `forums` (
     `created_by` INT UNSIGNED NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    KEY `fk_forums_user` (`created_by`),
-    CONSTRAINT `fk_forums_user` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+    KEY `idx_forums_user` (`created_by`)
 ) ENGINE=InnoDB;
 
 -- ------------------------------------------------------------
@@ -94,11 +94,7 @@ CREATE TABLE `forum_salones` (
     `forum_id` INT UNSIGNED NOT NULL,
     `salon_id` INT UNSIGNED NOT NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (`forum_id`, `salon_id`),
-    KEY `fk_forum_salones_forum` (`forum_id`),
-    KEY `fk_forum_salones_salon` (`salon_id`),
-    CONSTRAINT `fk_forum_salones_forum` FOREIGN KEY (`forum_id`) REFERENCES `forums` (`id`) ON DELETE CASCADE,
-    CONSTRAINT `fk_forum_salones_salon` FOREIGN KEY (`salon_id`) REFERENCES `salones` (`id`) ON DELETE CASCADE
+    PRIMARY KEY (`forum_id`, `salon_id`)
 ) ENGINE=InnoDB;
 
 -- ------------------------------------------------------------
@@ -113,13 +109,7 @@ CREATE TABLE `responses` (
     `content`    TEXT NOT NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    KEY `fk_responses_forum` (`forum_id`),
-    KEY `fk_responses_user` (`user_id`),
-    KEY `fk_responses_parent` (`parent_id`),
-    KEY `idx_responses_user_forum_type` (`user_id`, `forum_id`, `type`),
-    CONSTRAINT `fk_responses_forum`  FOREIGN KEY (`forum_id`)  REFERENCES `forums` (`id`)   ON DELETE CASCADE,
-    CONSTRAINT `fk_responses_user`   FOREIGN KEY (`user_id`)   REFERENCES `users` (`id`)    ON DELETE CASCADE,
-    CONSTRAINT `fk_responses_parent` FOREIGN KEY (`parent_id`) REFERENCES `responses` (`id`) ON DELETE CASCADE
+    KEY `idx_responses_user_forum_type` (`user_id`, `forum_id`, `type`)
 ) ENGINE=InnoDB;
 
 -- ------------------------------------------------------------
@@ -134,12 +124,45 @@ CREATE TABLE `security_logs` (
     `user_agent` VARCHAR(255) NULL,
     `created_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    KEY `fk_security_logs_user` (`user_id`),
-    KEY `idx_security_logs_event` (`event`),
-    CONSTRAINT `fk_security_logs_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+    KEY `idx_security_logs_event` (`event`)
 ) ENGINE=InnoDB;
 
-SET FOREIGN_KEY_CHECKS = 1;
+-- ============================================================
+--  FOREIGN KEYS (added at the end: every parent table exists
+--  and all inserted rows already satisfy the relationships)
+-- ============================================================
+ALTER TABLE `salones`
+    ADD CONSTRAINT `fk_salones_teacher`
+        FOREIGN KEY (`teacher_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+
+ALTER TABLE `users`
+    ADD CONSTRAINT `fk_users_salon`
+        FOREIGN KEY (`salon_id`) REFERENCES `salones` (`id`) ON DELETE SET NULL;
+
+ALTER TABLE `forums`
+    ADD CONSTRAINT `fk_forums_user`
+        FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL;
+
+ALTER TABLE `forum_salones`
+    ADD CONSTRAINT `fk_forum_salones_forum`
+        FOREIGN KEY (`forum_id`) REFERENCES `forums` (`id`) ON DELETE CASCADE;
+ALTER TABLE `forum_salones`
+    ADD CONSTRAINT `fk_forum_salones_salon`
+        FOREIGN KEY (`salon_id`) REFERENCES `salones` (`id`) ON DELETE CASCADE;
+
+ALTER TABLE `responses`
+    ADD CONSTRAINT `fk_responses_forum`
+        FOREIGN KEY (`forum_id`) REFERENCES `forums` (`id`) ON DELETE CASCADE;
+ALTER TABLE `responses`
+    ADD CONSTRAINT `fk_responses_user`
+        FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+ALTER TABLE `responses`
+    ADD CONSTRAINT `fk_responses_parent`
+        FOREIGN KEY (`parent_id`) REFERENCES `responses` (`id`) ON DELETE CASCADE;
+
+ALTER TABLE `security_logs`
+    ADD CONSTRAINT `fk_security_logs_user`
+        FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL;
 
 -- ============================================================
 --  INITIAL DATA
