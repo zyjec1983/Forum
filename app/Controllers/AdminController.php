@@ -271,11 +271,10 @@ class AdminController extends Controller
     public function forumDelete(): void
     {
         $this->guard();
-        $this->assertAdmin();
         csrf_check();
         $id    = (int) ($_POST['forum_id'] ?? 0);
         $forum = Forum::find($id);
-        if (!$forum) {
+        if (!$forum || !$this->ownsForum($forum)) {
             flash_set('error', 'Forum not found.');
             redirect(base_url('admin/forum'));
         }
@@ -672,17 +671,130 @@ class AdminController extends Controller
         if ($active && ($teacherScope === null || (int) $active['created_by'] === $teacherScope)) {
             $summary = Response::partnerJoinedActions((int) $active['id']);
         }
-        $this->view('admin/responses', [
-            'responses'   => Response::allFiltered([
-                'type'       => $_GET['type'] ?? '',
-                'search'     => $_GET['search'] ?? '',
-                'teacher_id' => $teacherScope,
-            ]),
-            'summary'     => $summary,
-            'filters'     => $_GET,
-            'activeForum' => $active,
-            'pageTitle'   => 'Forum Responses',
+        $rows = Response::studentActivity([
+            'type'       => $_GET['type'] ?? '',
+            'search'     => $_GET['search'] ?? '',
+            'teacher_id' => $teacherScope,
         ]);
+        $this->view('admin/responses', [
+            'grouped'    => $this->responsesGrouped($rows),
+            'summary'    => $summary,
+            'filters'    => $_GET,
+            'activeForum'=> $active,
+            'pageTitle'  => 'Forum Responses',
+        ]);
+    }
+
+    /** Groups participation rows per student, sorted last name / first name (case-insensitive). */
+    private function responsesGrouped(array $rows): array
+    {
+        $grouped = [];
+        foreach ($rows as $r) {
+            $key = (int) $r['user_id'];
+            if (!isset($grouped[$key])) {
+                $grouped[$key] = [
+                    'user'      => [
+                        'first_name' => $r['first_name'],
+                        'last_name'  => $r['last_name'],
+                        'email'      => $r['email'],
+                        'salon_name' => $r['salon_name'] ?? '',
+                    ],
+                    'responses' => [],
+                ];
+            }
+            $grouped[$key]['responses'][] = $r;
+        }
+        $names = [];
+        foreach ($grouped as $key => $g) {
+            $names[$key] = mb_strtoupper($g['user']['last_name'] . ' ' . $g['user']['first_name']);
+        }
+        asort($names, SORT_STRING);
+        $sorted = [];
+        foreach (array_keys($names) as $key) {
+            $sorted[] = $grouped[$key];
+        }
+        return $sorted;
+    }
+
+    public function responsesExport(): void
+    {
+        $this->guard();
+        csrf_check();
+        $teacherScope = $this->scope();
+        $rows = Response::studentActivity([
+            'type'       => $_POST['type'] ?? '',
+            'search'     => $_POST['search'] ?? '',
+            'teacher_id' => $teacherScope,
+        ]);
+        $grouped      = $this->responsesGrouped($rows);
+        $pdf          = new Pdf();
+        $typeLabel    = [
+            'teacher'    => 'Respuesta al docente',
+            'partner'    => 'Respuesta a companero',
+            'conclusion' => 'Conclusion final',
+        ];
+
+        $forums = [];
+        foreach ($rows as $r) {
+            if (!empty($r['forum_title'])) {
+                $forums[$r['forum_title']] = 1;
+            }
+        }
+        $multiForum = count($forums) > 1;
+        $participants = count($grouped);
+        $total = 0;
+        foreach ($grouped as $g) {
+            $total += count($g['responses']);
+        }
+
+        $pdf->writeBold('FORO ACADEMICO ECOMUNDO');
+        $pdf->writeBold('REPORTE DE ACTIVIDAD DE LOS PARTICIPANTES');
+        $pdf->write('Generado: ' . date('d/m/Y H:i') . ' (hora local de Ecuador)');
+        $pdf->write('Ambito: ' . ($teacherScope === null ? 'TODOS LOS ESTUDIANTES' : 'MIS ESTUDIANTES'));
+        if ($teacherScope !== null) {
+            $teacher = User::findById($teacherScope);
+            if ($teacher) {
+                $pdf->write('Docente: ' . $teacher['first_name'] . ' ' . $teacher['last_name']);
+            }
+        }
+        $pdf->write('Participantes: ' . $participants . '   Respuestas: ' . $total);
+        $pdf->blank();
+
+        foreach ($grouped as $g) {
+            $user   = $g['user'];
+            $count  = count($g['responses']);
+            $pdf->rule('=');
+            $pdf->writeBold('ESTUDIANTE: ' . mb_strtoupper($user['last_name']) . ', ' . $user['first_name']);
+            $pdf->write('Correo: ' . $user['email']);
+            if (!empty($user['salon_name'])) {
+                $pdf->write('Salon: ' . $user['salon_name']);
+            }
+            $pdf->write('Total de respuestas: ' . $count);
+            $pdf->rule('-');
+            $i = 0;
+            foreach ($g['responses'] as $r) {
+                $i++;
+                $label  = isset($typeLabel[$r['type']]) ? $typeLabel[$r['type']] : $r['type'];
+                $target = '';
+                if ($r['type'] === 'partner' && trim($r['parent_fn'] . ' ' . $r['parent_ln']) !== '') {
+                    $target = ' | Respondio a: ' . trim($r['parent_fn'] . ' ' . $r['parent_ln']);
+                }
+                if ($multiForum && !empty($r['forum_title'])) {
+                    $target .= ' | Foro: ' . $r['forum_title'];
+                }
+                $pdf->paragraph('[' . $i . '] ' . pretty_datetime($r['created_at']) . ' | ' . $label . $target);
+                $pdf->paragraph((string) $r['content'], 4);
+            }
+            $pdf->blank();
+        }
+        $pdf->writeBold('FIN DEL REPORTE');
+
+        $name = 'respuestas-' . date('Ymd-His') . '.pdf';
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: attachment; filename="' . $name . '"');
+        header('Cache-Control: no-store');
+        echo $pdf->render('Reporte de respuestas', 'ECOMUNDO');
+        exit;
     }
 
     public function responseDelete(): void
@@ -709,10 +821,10 @@ class AdminController extends Controller
     public function logDelete(): void
     {
         $this->guard();
-        $this->assertAdmin();
         csrf_check();
-        $id = (int) ($_POST['log_id'] ?? 0);
-        if (!SecurityLog::find($id)) {
+        $id  = (int) ($_POST['log_id'] ?? 0);
+        $row = SecurityLog::find($id);
+        if (!$row || !$this->ownsLog($row)) {
             flash_set('error', 'Log entry not found.');
             redirect(base_url('admin/logs'));
         }
@@ -721,13 +833,39 @@ class AdminController extends Controller
         redirect(base_url('admin/logs'));
     }
 
-    public function logsClear(): void
+    private function ownsLog(array $row): bool
+    {
+        $scope = $this->scope();
+        if ($scope === null) {
+            return true;
+        }
+        if ((int) ($row['user_id'] ?? 0) === $scope) {
+            return true;
+        }
+        $ids = array_column(User::all(['role' => 'student', 'teacher_id' => $scope]), 'id');
+        $ids = array_merge($ids, array_column(User::all(['role' => 'guest', 'teacher_id' => $scope]), 'id'));
+        $ids = array_map('intval', $ids);
+        return in_array((int) $row['user_id'], $ids, true);
+    }
+
+public function logsClear(): void
     {
         $this->guard();
-        $this->assertAdmin();
         csrf_check();
-        SecurityLog::clear();
-        SecurityLog::record($this->uid(), 'logs_cleared', 'Security log cleared by the administrator', client_ip());
+        $scope = $this->scope();
+        if ($scope === null) {
+            SecurityLog::clear();
+            $detail = 'Security log cleared by the administrator';
+        } else {
+            $ids = array_merge(
+                [$scope],
+                array_column(User::all(['role' => 'student', 'teacher_id' => $scope]), 'id'),
+                array_column(User::all(['role' => 'guest', 'teacher_id' => $scope]), 'id')
+            );
+            SecurityLog::clearFor($ids);
+            $detail = 'Security log cleared by the teacher (own scope)';
+        }
+        SecurityLog::record($this->uid(), 'logs_cleared', $detail, client_ip());
         flash_set('success', 'Security log cleared.');
         redirect(base_url('admin/logs'));
     }

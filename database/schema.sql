@@ -1,15 +1,22 @@
 -- ============================================================
---  ECOMUNDO Academic Forum  ·  MySQL / MySQLi
---  Import this file in phpMyAdmin (Import tab).
---  Initial admin user: admin@ecomundo.edu.ec
---  Password: Admin@2026  (change it after first sign-in)
+--  ECOMUNDO Academic Forum  ·  MySQL / MariaDB (utf8mb4)
+--  PRODUCTION / FRESH SCHEMA
+--
+--  HOW TO IMPORT (InfinityFree or any shared host):
+--    1. Create the database in the control panel (e.g. my_forum).
+--    2. Open phpMyAdmin, SELECT that database.
+--    3. Import this file (Import tab). No CREATE DATABASE here,
+--       so it works even when the user has rights over one DB only.
+--
+--  This file is idempotent: it drops and recreates the 7 tables.
+--  Seed data: settings, 5 example classrooms, the administrator
+--  (admin@ecomundo.edu.ec / Admin@2026) and, as an OPTIONAL sample,
+--  one active forum assigned to all classrooms.
+--  Change the admin password after the first sign-in.
 -- ============================================================
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
-
-CREATE DATABASE IF NOT EXISTS `my_forum` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE `my_forum`;
 
 DROP TABLE IF EXISTS `security_logs`;
 DROP TABLE IF EXISTS `responses`;
@@ -19,14 +26,18 @@ DROP TABLE IF EXISTS `users`;
 DROP TABLE IF EXISTS `salones`;
 DROP TABLE IF EXISTS `settings`;
 
--- Global configuration (key-value)
+-- ------------------------------------------------------------
+--  settings · global key–value configuration
+-- ------------------------------------------------------------
 CREATE TABLE `settings` (
     `setting_key`   VARCHAR(50)  NOT NULL,
     `setting_value` VARCHAR(255) NOT NULL,
     PRIMARY KEY (`setting_key`)
 ) ENGINE=InnoDB;
 
--- Classrooms managed by the administrator / teacher (9th "A", 9th "B", ...)
+-- ------------------------------------------------------------
+--  salones · classrooms (owned by a teacher when assigned)
+-- ------------------------------------------------------------
 CREATE TABLE `salones` (
     `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `name`       VARCHAR(80)  NOT NULL,
@@ -38,7 +49,9 @@ CREATE TABLE `salones` (
     CONSTRAINT `fk_salones_teacher` FOREIGN KEY (`teacher_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- Users (students, teachers, guests and the administrator)
+-- ------------------------------------------------------------
+--  users · students, teachers, guests and the administrator
+-- ------------------------------------------------------------
 CREATE TABLE `users` (
     `id`              INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `email`           VARCHAR(190) NOT NULL,
@@ -56,7 +69,9 @@ CREATE TABLE `users` (
     CONSTRAINT `fk_users_salon` FOREIGN KEY (`salon_id`) REFERENCES `salones` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
--- Forums with a time window (open_at / close_at)
+-- ------------------------------------------------------------
+--  forums · activities with a participation time window
+-- ------------------------------------------------------------
 CREATE TABLE `forums` (
     `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `title`      VARCHAR(190) NOT NULL,
@@ -72,7 +87,9 @@ CREATE TABLE `forums` (
     CONSTRAINT `fk_forums_user` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
--- Assignment: which classrooms can access each forum (forum <-> classroom)
+-- ------------------------------------------------------------
+--  forum_salones · assignment: which classrooms see each forum
+-- ------------------------------------------------------------
 CREATE TABLE `forum_salones` (
     `forum_id` INT UNSIGNED NOT NULL,
     `salon_id` INT UNSIGNED NOT NULL,
@@ -84,7 +101,9 @@ CREATE TABLE `forum_salones` (
     CONSTRAINT `fk_forum_salones_salon` FOREIGN KEY (`salon_id`) REFERENCES `salones` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- Participations: teacher (to the teacher, unique) / partner (reply) / conclusion (unique)
+-- ------------------------------------------------------------
+--  responses · teacher (unique) / partner (reply) / conclusion (unique)
+-- ------------------------------------------------------------
 CREATE TABLE `responses` (
     `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `forum_id`   INT UNSIGNED NOT NULL,
@@ -103,7 +122,9 @@ CREATE TABLE `responses` (
     CONSTRAINT `fk_responses_parent` FOREIGN KEY (`parent_id`) REFERENCES `responses` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- Security audit (copy/screenshot/hack attempts, IP, date, etc.)
+-- ------------------------------------------------------------
+--  security_logs · audit trail
+-- ------------------------------------------------------------
 CREATE TABLE `security_logs` (
     `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `user_id`    INT UNSIGNED NULL,
@@ -118,28 +139,36 @@ CREATE TABLE `security_logs` (
     CONSTRAINT `fk_security_logs_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
+SET FOREIGN_KEY_CHECKS = 1;
+
 -- ============================================================
 --  INITIAL DATA
 -- ============================================================
--- Global settings: accepted email domains for registration.
--- 'allow_any_domain' = 1 accepts any domain (gmail.com, outlook.com, ...).
+
+-- Registration domains: accept any domain? no. Allowed: ecomundo.edu.ec
 INSERT INTO `settings` (`setting_key`, `setting_value`) VALUES
 ('allow_any_domain', '0'),
 ('accepted_domains', 'ecomundo.edu.ec');
 
-INSERT INTO `salones` (`name`) VALUES ('9th "A"'), ('9th "B"'), ('9th "C"'), ('9th "D"'), ('9th "E"');
+-- Example classrooms (used by the admin to assign owners)
+INSERT INTO `salones` (`name`) VALUES
+('9th "A"'), ('9th "B"'), ('9th "C"'), ('9th "D"'), ('9th "E"');
 
--- Default administrator: admin@ecomundo.edu.ec / Admin@2026
+-- Administrator (bcrypt of "Admin@2026"); change it after first sign-in
 INSERT INTO `users` (`email`, `first_name`, `last_name`, `password`, `role`)
 VALUES (
     'admin@ecomundo.edu.ec',
     'Administrator',
     'ECOMUNDO',
-    '$2y$10$vwY8oBRVgjJZO0rgS6ipaOWnwOqodqHC6oWPJEBEwfPtQx9Wh8.Im', -- Admin@2026
+    '$2y$10$vwY8oBRVgjJZO0rgS6ipaOWnwOqodqHC6oWPJEBEwfPtQx9Wh8.Im',
     'admin'
 );
 
--- Example active forum (adjust the dates to your schedule)
+-- ------------------------------------------------------------------
+--  OPTIONAL demo forum (comment out for a completely clean start).
+--  A real activity is created by the teacher from Admin -> Forum
+--  Management with its own title, question and time window.
+-- ------------------------------------------------------------------
 INSERT INTO `forums` (`title`, `subject`, `question`, `open_at`, `close_at`, `is_active`, `created_by`)
 VALUES (
     'Forum: PISA Results and Artificial Intelligence',
@@ -151,8 +180,5 @@ VALUES (
     1
 );
 
--- The example forum is assigned to every classroom so it is visible to all students
 INSERT INTO `forum_salones` (`forum_id`, `salon_id`)
 SELECT 1, `id` FROM `salones`;
-
-SET FOREIGN_KEY_CHECKS = 1;

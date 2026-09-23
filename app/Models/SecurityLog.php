@@ -94,6 +94,19 @@ class SecurityLog
         Database::execute("DELETE FROM security_logs");
     }
 
+    /** Deletes all log entries belonging to the given user ids (teacher scope). */
+    public static function clearFor(array $userIds): void
+    {
+        $ids = array_values(array_unique(array_map('intval', $userIds)));
+        $ids = array_filter($ids, function ($id) { return $id > 0; });
+        if (!$ids) {
+            return;
+        }
+        Database::execute(
+            "DELETE FROM security_logs WHERE user_id IN (" . implode(',', $ids) . ")"
+        );
+    }
+
     /** Human readable label for each event shown in the admin panel. */
     public static function eventLabel(string $event): string
     {

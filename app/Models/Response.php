@@ -115,6 +115,42 @@ class Response
         return Database::fetchAll($sql, $params);
     }
 
+    /** All responses ordered last name / first name, ready to be grouped per student (page + PDF export). */
+    public static function studentActivity(array $filters = []): array
+    {
+        $sql    = "SELECT r.*, u.first_name, u.last_name, u.email, s.name AS salon_name,
+                          pu.first_name AS parent_fn, pu.last_name AS parent_ln, f.title AS forum_title
+                   FROM responses r
+                   JOIN users u ON u.id = r.user_id
+                   LEFT JOIN salones s ON s.id = u.salon_id
+                   LEFT JOIN responses pr ON pr.id = r.parent_id
+                   LEFT JOIN users pu ON pu.id = pr.user_id
+                   LEFT JOIN forums f ON f.id = r.forum_id
+                   WHERE 1=1";
+        $params = [];
+        if (!empty($filters['type'])) {
+            $sql      .= " AND r.type = ?";
+            $params[] = $filters['type'];
+        }
+        if (!empty($filters['forum_id'])) {
+            $sql      .= " AND r.forum_id = ?";
+            $params[] = (int) $filters['forum_id'];
+        }
+        if (!empty($filters['teacher_id'])) {
+            $sql .= " AND r.forum_id IN (SELECT id FROM forums WHERE created_by = ?)";
+            $params[] = (int) $filters['teacher_id'];
+        }
+        if (!empty($filters['search'])) {
+            $sql .= " AND (u.first_name LIKE ? OR u.last_name LIKE ? OR r.content LIKE ? OR u.email LIKE ?)";
+            $like = '%' . $filters['search'] . '%';
+            foreach ([1, 2, 3, 4] as $_k) {
+                $params[] = $like;
+            }
+        }
+        $sql .= " ORDER BY u.last_name ASC, u.first_name ASC, r.created_at ASC";
+        return Database::fetchAll($sql, $params);
+    }
+
     public static function total(?int $teacherId = null): int
     {
         if ($teacherId === null) {
@@ -145,7 +181,7 @@ class Response
              LEFT JOIN salones s ON s.id = u.salon_id
              WHERE r.forum_id = ?
              GROUP BY r.user_id, u.first_name, u.last_name, u.email, s.name
-             ORDER BY u.first_name, u.last_name",
+             ORDER BY u.last_name, u.first_name",
             [$forumId]
         );
     }

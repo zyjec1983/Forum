@@ -1,5 +1,11 @@
 <?php $activeNav = 'logs';
 $__isAdminRole = is_admin_user();
+$__canDeleteLogs = $__isAdminRole || (current_user()['role'] ?? '') === 'teacher';
+$__canClearLogs = $__isAdminRole || (current_user()['role'] ?? '') === 'teacher';
+$__clearLabel = $__isAdminRole ? 'Clear activities' : 'Clear my logs';
+$__clearConfirm = $__isAdminRole
+    ? 'Delete ALL the security activities? This action cannot be undone.'
+    : 'Delete ALL the security activities of your account and your students? This action cannot be undone.';
 ?>
 <?php include APP_PATH . '/Views/admin/_admin_head.php'; ?>
 
@@ -8,11 +14,11 @@ $__isAdminRole = is_admin_user();
         <h1 class="h4 fw-bold mb-0">Security / Audit Log</h1>
         <p class="text-muted small mb-0"><?= $__isAdminRole ? 'See here <strong>who</strong> tried to copy, cut, paste, select, screenshot, open the console or breach the forum rules, with date/time and IP.' : 'Audit of your own account and your students.' ?></p>
     </div>
-    <?php if ($__isAdminRole): ?>
+    <?php if ($__canClearLogs): ?>
         <form method="post" action="<?= e(base_url('admin/logs/clear')) ?>"
-              onsubmit="return confirm('Delete ALL the security log entries? This action cannot be undone.');">
+              onsubmit="return confirm('<?= e($__clearConfirm) ?>');">
             <?= csrf_field() ?>
-            <button class="btn btn-sm btn-outline-danger">Clear log</button>
+            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash me-1"></i><?= e($__clearLabel) ?></button>
         </form>
     <?php endif; ?>
 </div>
@@ -49,7 +55,7 @@ $__isAdminRole = is_admin_user();
                     <th>Event</th>
                     <th>Detail</th>
                     <th>IP</th>
-                    <?php if ($__isAdminRole): ?><th class="text-end">Action</th><?php endif; ?>
+                    <?php if ($__canDeleteLogs): ?><th class="text-end">Action</th><?php endif; ?>
                 </tr>
             </thead>
             <tbody>
@@ -73,7 +79,7 @@ $__isAdminRole = is_admin_user();
                         </td>
                         <td class="text-secondary" style="max-width: 380px;"><?= e($l['detail'] ?? '—') ?></td>
                         <td class="text-nowrap"><code><?= e($l['ip']) ?></code></td>
-                        <?php if ($__isAdminRole): ?>
+                        <?php if ($__canDeleteLogs): ?>
                             <td class="text-end">
                                 <form method="post" action="<?= e(base_url('admin/logs/delete')) ?>" class="d-inline"
                                       onsubmit="return confirm('Delete this log entry (ID <?= (int) $l['id'] ?>)?');">
@@ -86,7 +92,7 @@ $__isAdminRole = is_admin_user();
                     </tr>
                 <?php endforeach; ?>
                 <?php if (!$logs): ?>
-                    <tr><td colspan="<?= $__isAdminRole ? 6 : 5 ?>" class="text-center text-muted py-4">No security events registered.</td></tr>
+                    <tr><td colspan="<?= $__canDeleteLogs ? 6 : 5 ?>" class="text-center text-muted py-4">No security events registered.</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
