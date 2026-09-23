@@ -100,24 +100,6 @@ body {
     -webkit-touch-callout: none;
 }
 
-/* Anti-screenshot watermark */
-.screen-watermark {
-    position: fixed;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.4rem;
-    font-weight: 700;
-    color: #0f172a;
-    opacity: 0.05;
-    pointer-events: none;
-    z-index: 1030;
-    transform: rotate(-28deg);
-    letter-spacing: 1px;
-    white-space: nowrap;
-}
-
 /* Classroom assignment checkboxes (admin: create / edit forum) */
 .classroom-checkbox-group {
     display: flex;
@@ -132,39 +114,6 @@ body {
     margin: 0;
     padding-left: 1.5rem;
 }
-
-/* Full-screen shield shown when a screen-capture attempt is detected: the
-   cover stays and the student is forced to close the session. */
-.capture-shield {
-    position: fixed;
-    inset: 0;
-    display: none;
-    z-index: 99999;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 2rem;
-    background: #0f172a;
-    color: #fff;
-    font-size: 1.15rem;
-    font-weight: 600;
-    line-height: 1.6;
-}
-.capture-shield.visible { display: flex; }
-.capture-shield .shield-title {
-    display: block;
-    font-size: 1.35rem;
-    font-weight: 800;
-    margin-bottom: 0.5rem;
-}
-.capture-shield .shield-msg {
-    display: block;
-    font-size: 1rem;
-    font-weight: 500;
-    opacity: 0.9;
-    margin-bottom: 1rem;
-}
-.capture-shield .shield-logout { margin-top: 0.5rem; }
 
 /* Clave temporal de recuperación */
 .recover-key {

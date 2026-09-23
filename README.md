@@ -117,7 +117,7 @@ HTML to the browser  (+ public/js/*, public/css/*)
 | `app/Views/` | Templates rendered on the server. |
 | `public/js/app.js` | Browser helpers (`App.baseURL`, `App.csrf`, `App.post`, `App.alert`, `App.confirm`). |
 | `public/js/forum.js` | Forum countdown, time-window control and AJAX participation. |
-| `public/js/security.js` | Anti-capture / anti-cheat client defence. |
+| `public/js/security.js` | Anti-copy / anti-cheat client defence. |
 | `public/css/app.css` | Forum lock, watermark, capture shield, admin styles. |
 
 ---
@@ -270,7 +270,7 @@ All in `app/Helpers/functions.php`:
 
 ---
 
-## Anti-capture / anti-cheat frontend
+## Anti-copy / anti-cheat frontend
 
 `public/js/security.js` is loaded **only for students on forum pages** (guests never load it).
 
@@ -281,38 +281,14 @@ All in `app/Helpers/functions.php`:
 - `F12` and `Ctrl+Shift+I/J/C/U/P/S`
 - DevTools panel detection (window-dimension heuristic, checked every 5 s and on `resize`)
 
-### Clipboard wipe (best-effort, multi-format)
-Windows keeps **several formats** per clipboard entry; writing text alone leaves the bitmap of
-a capture intact. `overwriteClipboard()` therefore:
-1. Writes `' '` with the async Clipboard API **and** the `document.execCommand('copy')` fallback
-   (so a rejected promise never skips the wipe);
-2. **Overwrites the image format with a blank 1×1 transparent PNG** (`ClipboardItem`) so pasting
-   the capture into Paint / Photos shows nothing;
-3. Wipes on `clipboardchange` (with retries), on Print Screen and immediately when the tab
-   regains focus (clean-up after a snip done in the background).
-
-### Capture shield (black screen + forced sign-out)
-- **Print Screen / Alt+Print Screen**, the **Snipping tool**, a **window/tab switch** (Alt+Tab,
-  another app, background tab) hide the tab → `visibilitychange → hidden` or the synchronous
-  key handler triggers `forceSignOut()`.
-- A `window blur` is only treated as a capture attempt **when the tab really left the screen**
-  (`document.visibilityState === 'hidden'`), so clicking/typing in the answer box never fires it.
-- `forceSignOut()` shows the full-screen `.capture-shield` (black, with a "Sign out" button),
-  wipes the clipboard, reports the event via `sendBeacon` and redirects to logout after ~3 s.
-- **macOS** shortcuts `Cmd+Shift+3/4/5` are intercepted on `keydown`.
-- **Watermark:** the student's name + email are drawn diagonally on the page (`.screen-watermark`).
-
-### Device/platform awareness
-`security.js` detects the OS from the user agent (`Windows`, `macOS`, `Android`, `iOS`,
-`Linux`, `Unknown`) and appends `· Device: <platform>` to **every** security log, so the
-teacher sees which system each attempt came from. Capture handling per platform:
-- **Windows** – key interception + clipboard wipe (text + PNG) + shield on hidden.
-- **macOS** – `Cmd+Shift+3/4/5` key interception + wipe + shield on hidden.
-- **Android/iOS** – the screenshot gesture hides the tab → shield + forced sign-out + log.
+All blocks are passive (`preventDefault`) — nothing writes to the clipboard or steals focus,
+so normal buttons (responses, final conclusion) are never affected.
 
 ### Reporting / throttling
 Client events post to `forum/report` (CSRF-protected). Report throttling: 90 s for devtools,
-45 s for the rest, to avoid flooding the log.
+45 s for the rest, to avoid flooding the log. `security.js` detects the OS from the user agent
+(`Windows`, `macOS`, `Android`, `iOS`, `Linux`, `Unknown`) and appends `· Device: <platform>`
+to every security log, so the teacher sees which system each attempt came from.
 
 ---
 
@@ -325,7 +301,7 @@ with the parent or auditor, who signs in on the normal page and is redirected to
 - Guests see the classroom's forums and their contents, exactly like a student.
 - There is **no** response form, final conclusion box or admin panel; the server rejects any
   participation attempt by a guest (`{"ok":false,"hack":true,...}`).
-- The anti-cheat shield **is not** applied to guests (they may legally view the screen).
+- The anti-copy blocking **is not** applied to guests (they may legally view the screen).
 - Teachers can lock/unlock and delete **their own** guests; the admin manages all of them.
 
 ---
@@ -360,7 +336,7 @@ my-forum/
 │   └── js/
 │       ├── app.js           # App helper (baseURL, csrf, post, alert, confirm)
 │       ├── forum.js         # countdown, time-window control, AJAX participation
-│       └── security.js      # anti-capture / anti-cheat defence
+│       └── security.js      # anti-copy / anti-cheat defence
 └── app/
     ├── routes.php           # all routes
     ├── Core/
