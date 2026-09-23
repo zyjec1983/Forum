@@ -28,9 +28,15 @@
         return p.d + ' day(s), ' + p.h + ' hour(s), ' + p.m + ' minute(s) and ' + p.s + ' second(s)';
     }
     function pad(n) { return (n < 10 ? '0' : '') + n; }
+    function fmtClock(sec) {
+        var d = new Date(sec * 1000);
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+               ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
     function clock(sec) {
         var p = parts(sec);
-        return pad(p.h) + ':' + pad(p.m) + ':' + pad(p.s);
+        var d = p.d > 0 ? p.d + 'd ' : '';
+        return d + pad(p.h % 24) + ':' + pad(p.m) + ':' + pad(p.s);
     }
 
     function windowState() {
@@ -41,7 +47,7 @@
         if (now > closeTs) {
             return { status: 'expired', message: 'The forum expired ' + fmt(now - closeTs) + ' ago.' };
         }
-        return { status: 'open', remaining: closeTs - now };
+        return { status: 'open', remaining: closeTs - now, message: 'It will close on ' + fmtClock(closeTs) + ' (device time).' };
     }
 
     // ---------------- Banner / countdown ----------------

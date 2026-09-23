@@ -10,6 +10,11 @@ define('APP_PATH', ROOT_PATH . DS . 'app');
 define('CONFIG_PATH', ROOT_PATH . DS . 'config');
 define('PUBLIC_PATH', ROOT_PATH . DS . 'public');
 
+// Zona horaria operativa de la institución (Ecuador continental, UTC-5).
+// Todas las fechas del foro (apertura/cierre, cuentas regresivas, registros)
+// se interpretan en hora local de Guayaquil.
+date_default_timezone_set('America/Guayaquil');
+
 // Base URL calculada automáticamente (ej. http://localhost/my-forum)
 $__scriptDir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), '/');
 define('BASE_URL', $__scriptDir);

@@ -1,7 +1,12 @@
 /* ============================================================
    security.js · client-side security (forum pages only)
-   Blocks: Copy, Cut, Paste, Select, context menu,
-   screenshots and developer tools.
+   Blocks: Copy, Cut, Paste, Select, context menu, Print Screen
+   and developer tools.
+   A real window/tab switch (Alt+Tab, another app) shows the black
+   shield and closes the session; in-page interaction (typing,
+   clicking the answer box) never does. On Print Screen the
+   temporary memory (clipboard) is wiped so the captured frame
+   cannot be pasted anywhere.
    Every attempt is reported to the server with user, date/time and IP.
    ============================================================ */
 (function (window, document) {
@@ -15,6 +20,22 @@
         }
     } catch (e) { /* no user -> reports still go out with null id */ }
 
+    // ---------- Device / platform (drives capture defense per OS) ----------
+    // Windows: Print Screen / Snipping hide the tab -> the black shield fires.
+    // macOS: Cmd+Shift+3/4/5 shortcuts are intercepted on keydown.
+    // Android/iOS: the screenshot gesture hides the tab (Chrome/Safari) ->
+    //              the shield fires; the platform is logged for the teacher.
+    var platform = (function () {
+        var ua = navigator.userAgent || '';
+        if (/iphone|ipad|ipod/i.test(ua)) { return 'iOS'; }
+        if (/android/i.test(ua)) { return 'Android'; }
+        var p = (navigator.userAgentData && navigator.userAgentData.platform) ? navigator.userAgentData.platform : (navigator.platform || '');
+        if (/win/i.test(p + ' ' + ua)) { return 'Windows'; }
+        if (/mac/i.test(p + ' ' + ua)) { return 'macOS'; }
+        if (/linux/i.test(p + ' ' + ua)) { return 'Linux'; }
+        return 'Unknown';
+    })();
+
     // Block text selection on the whole forum page
     document.body.classList.add('forum-lock');
 
@@ -27,32 +48,19 @@
         document.body.appendChild(wm);
     }
 
-    // Screen-capture shield: as soon as a capture attempt is detected
-    // (PrtSc key, snip/screen-capture tool, window or tab switch-out), a
-    // full-screen cover is shown and stays; the student is then forced to
-    // close the session. It only appears during those attempts: a fresh
-    // sign-in never shows it again.
-    var shield = document.createElement('div');
-    shield.className = 'capture-shield';
-    shield.innerHTML =
-        '<div>' +
-        '<span class="shield-title">Screen capture attempt detected</span>' +
-        '<span class="shield-msg"></span>' +
-        '<button type="button" class="btn btn-light btn-sm shield-logout">Sign out / Sign in again</button>' +
-        '</div>';
-    document.body.appendChild(shield);
-
-    var logoutPending = false;
-
-    // Best-effort clipboard wipe: after a capture attempt, the last entry on
-    // the clipboard is replaced so that pasting it elsewhere shows nothing.
-    // Browsers restrict this while the window is blurred, so the permanent
-    // black shield is the real defense; this is an extra layer.
+    // Clipboard wipe: replaces the temporary memory content so a screenshot
+    // taken (Print Screen / snip tool) cannot be pasted anywhere after the fact.
+    // Windows keeps SEVERAL formats per clipboard entry: writing text leaves the
+    // bitmap (DIB/PNG) of a capture intact, so we ALSO overwrite the image
+    // format with a blank 1x1 PNG (mspaint/photos paste then shows nothing).
+    // Both the async Clipboard API and the synchronous execCommand fallback
+    // are used: if the first is rejected (no user gesture), the second still
+    // overwrites the current clipboard content.
     function overwriteClipboard(text) {
         text = text || ' ';
         try {
             if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(text).catch(function () { /* ignore */ });
+                navigator.clipboard.writeText(text).catch(function () { /* execCommand below covers it */ });
             }
         } catch (e) { /* ignore */ }
         try {
@@ -66,15 +74,75 @@
             document.execCommand('copy');
             ta.remove();
         } catch (e) { /* ignore */ }
+        try {
+            if (typeof ClipboardItem !== 'undefined' && navigator.clipboard && navigator.clipboard.write) {
+                var c = document.createElement('canvas');
+                c.width = 1;
+                c.height = 1;
+                var cctx = c.getContext('2d');
+                cctx.fillStyle = 'rgba(0,0,0,0)';
+                cctx.fillRect(0, 0, 1, 1);
+                c.toBlob(function (blob) {
+                    if (!blob) { return; }
+                    try {
+                        navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+                    } catch (e) { /* ignore */ }
+                }, 'image/png');
+            }
+        } catch (e) { /* ignore */ }
     }
 
+    // Pre-warm: on the first real interaction we request clipboard-write so later
+    // wipes work even without a user gesture (the async API rejects writes
+    // when the document has no activation, e.g. a pure OS capture).
+    var clipboardWarmed = false;
+    function warmClipboard() {
+        if (clipboardWarmed) { return; }
+        clipboardWarmed = true;
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(' ');
+            }
+        } catch (e) { /* ignore */ }
+    }
+    document.addEventListener('mousedown', warmClipboard, true);
+    document.addEventListener('keydown', warmClipboard, true);
+
     // Chromium fires 'clipboardchange' when a screen-capture tool writes the
-    // image; blank it right away while the sign-out is pending.
+    // image to the clipboard; blank it repeatedly so pasting shows nothing
+    // (a single write can lose the race with the OS capture/history).
     try {
         navigator.clipboard.addEventListener('clipboardchange', function () {
-            if (logoutPending) { overwriteClipboard(' '); }
+            for (var i = 0; i < 4; i++) {
+                (function (t) {
+                    setTimeout(function () { overwriteClipboard(' '); }, t);
+                })(i * 200);
+            }
         });
     } catch (e) { /* not supported */ }
+
+    // A capture written while the tab was in the background (e.g. the Snipping
+    // overlay) is blanked the moment the tab regains focus, so pasting the
+    // frame right after shows nothing.
+    window.addEventListener('focus', function () {
+        overwriteClipboard(' ');
+    }, true);
+
+    // Screen-capture shield for window/tab switches. Only a REAL switch to
+    // another window or tab triggers it (Alt+Tab, opening another app). Any
+    // interaction inside the page (clicking the answer box, typing, scrolling)
+    // keeps the clock fresh, so legitimate use never signs the student out.
+    var shield = document.createElement('div');
+    shield.className = 'capture-shield';
+    shield.innerHTML =
+        '<div>' +
+        '<span class="shield-title">Screen capture attempt detected</span>' +
+        '<span class="shield-msg"></span>' +
+        '<button type="button" class="btn btn-light btn-sm shield-logout">Sign out / Sign in again</button>' +
+        '</div>';
+    document.body.appendChild(shield);
+
+    var logoutPending = false;
 
     function forceSignOut(label, detail) {
         if (logoutPending) { return; }
@@ -85,18 +153,18 @@
             var fd = new FormData();
             fd.append('csrf', window.App.csrf());
             fd.append('event', 'printscreen');
-            fd.append('detail', label + ' — ' + detail);
+            fd.append('detail', label + ' \u2014 ' + detail + ' · Device: ' + platform);
             if (navigator.sendBeacon) {
                 navigator.sendBeacon(window.App.baseURL() + '/forum/report', fd);
             } else {
                 window.App.post(window.App.baseURL() + '/forum/report', {
                     event: 'printscreen',
-                    detail: label + ' — ' + detail
+                    detail: label + ' \u2014 ' + detail
                 });
             }
         } catch (e) { /* ignore */ }
 
-        // Blank the clipboard so the captured frame does not paste in other apps.
+        // Blank the clipboard so a captured frame does not paste anywhere.
         overwriteClipboard(' ');
         var wipeTries = 0;
         var wipeTimer = setInterval(function () {
@@ -114,32 +182,49 @@
 
         setTimeout(function () {
             window.location.href = logoutUrl;
-        }, 1500);
+        }, 3000);
     }
 
-    function screenCaptureAttempt(label, detail) {
-        forceSignOut(label, detail);
+    // Fresh timestamp on every in-page interaction (click, typing, touch,
+    // walking through fields). A blur/visibility that happens while the user
+    // is clearly using the page is not a capture attempt.
+    var lastInteraction = 0;
+    document.addEventListener('mousedown', function () { lastInteraction = Date.now(); }, true);
+    document.addEventListener('keydown', function () { lastInteraction = Date.now(); }, true);
+    document.addEventListener('touchstart', function () { lastInteraction = Date.now(); }, true);
+    document.addEventListener('focus', function () { lastInteraction = Date.now(); }, true);
+
+    function looksLikeCapture() {
+        return (Date.now() - lastInteraction) > 150;
     }
 
-    // Capture attempts: screen-capture/snip tools and other apps blur the
-    // window/tab the moment the overlay is taken. Only trigger once the page
-    // has been focused/visible, so opening the forum in a background tab does
-    // not count as an attempt.
+    // A REAL capture always means the tab left the screen (window switched,
+    // another app covered it, the tab went to the background). The browser
+    // ALSO fires a window blur on in-page focus juggling (the SweetAlert
+    // "Action not allowed" popup, focus rings, etc.) WITHOUT the tab leaving
+    // the screen, so those are only counted when the tab is actually gone.
     var everFocused = false;
     window.addEventListener('focus', function () { everFocused = true; }, true);
     window.addEventListener('blur', function () {
-        if (everFocused) {
-            screenCaptureAttempt('Screen capture / window switch', 'the page lost focus');
+        if (everFocused && looksLikeCapture() && document.visibilityState === 'hidden') {
+            forceSignOut('Screen capture / window switch', 'the page left the screen');
         }
     }, true);
+
+    // No popup is open while the tab really goes to the background, so a
+    // micro-hide right after an in-page alert cannot be a capture.
+    function popupOpen() {
+        return !!document.querySelector('.swal2-container');
+    }
+
     var seenVisible = document.visibilityState === 'visible';
     document.addEventListener('visibilitychange', function () {
         if (document.visibilityState === 'visible') {
             seenVisible = true;
             return;
         }
-        if (seenVisible) {
-            screenCaptureAttempt('Screen capture / tab switch', 'the tab went to the background');
+        if (seenVisible && looksLikeCapture() && !popupOpen()) {
+            forceSignOut('Screen capture / tab switch', 'the tab went to the background');
         }
     });
 
@@ -158,7 +243,7 @@
         try {
             window.App.post(window.App.baseURL() + '/forum/report', {
                 event: eventName,
-                detail: detail
+                detail: detail + ' · Device: ' + platform
             }).catch(function () { /* silent */ });
         } catch (e) { /* no report if the helper is missing */ }
     }
@@ -200,13 +285,13 @@
         warn('paste', 'Attempt to paste text in the forum');
     }, true);
 
-    // Text selection
+    // Text selection (inside fields the caret still works: selection is blocked)
     document.addEventListener('selectstart', function (e) {
         e.preventDefault();
         warn('select', 'Attempt to select text in the forum');
     }, true);
 
-    // Context menu (right click) -> prevents "view source", menu copying
+    // Context menu (right click)
     document.addEventListener('contextmenu', function (e) {
         e.preventDefault();
         warn('contextmenu', 'Context menu blocked in the forum');
@@ -218,7 +303,7 @@
         warn('drag', 'Attempt to drag text in the forum');
     }, true);
 
-    // Keyboard selection movement inside fields
+    // Keyboard: shortcuts and Print Screen
     document.addEventListener('keydown', function (e) {
         var k = (e.key || '').toLowerCase();
         var mod = e.ctrlKey || e.metaKey;
@@ -228,9 +313,23 @@
             warn('devtools', 'F12 key (developer tools) blocked');
             return;
         }
+        if (e.altKey && e.key === 'PrintScreen') {
+            e.preventDefault();
+            forceSignOut('Screen capture / active window', 'Alt+PrintScreen pressed');
+            return;
+        }
+        // macOS screen captures: Cmd+Shift+3 (full), 4 (area), 5 (toolbar)
+        if (e.metaKey && e.shiftKey && (k === '3' || k === '4' || k === '5')) {
+            e.preventDefault();
+            forceSignOut('Screen capture / macOS', 'Cmd+Shift+' + k.toUpperCase() + ' screenshot shortcut');
+            return;
+        }
         if (e.key === 'PrintScreen' || e.code === 'PrintScreen') {
             e.preventDefault();
-            screenCaptureAttempt('Print Screen (PrtSc) key', 'screen-capture button pressed');
+            // The frame was captured by the OS; the temporary memory is wiped
+            // so it cannot be pasted anywhere AND the black shield + forced
+            // logout close the session so the attempt has no value.
+            forceSignOut('Screen capture / Print Screen', 'the Print Screen key was pressed');
             return;
         }
         if (mod && k === 'c') { e.preventDefault(); warn('copy', 'Ctrl+C blocked'); return; }
@@ -259,14 +358,5 @@
         setInterval(probe, 5000);
         window.addEventListener('resize', probe);
     })();
-
-    // ---------------- Extra shortcuts ----------------
-    // Prevent text from being dragged out from page inputs
-    document.addEventListener('touchend', function (e) {
-        // On mobile, prevent selection by long press on non-editable elements
-        if (document.activeElement && document.activeElement.tagName === 'INPUT') {
-            return;
-        }
-    }, false);
 
 })(window, document);
