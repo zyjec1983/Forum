@@ -56,8 +56,13 @@
     // Both the async Clipboard API and the synchronous execCommand fallback
     // are used: if the first is rejected (no user gesture), the second still
     // overwrites the current clipboard content.
+    // lastClipWrite avoids a self-triggering loop: our own writes fire the
+    // Chromium 'clipboardchange' event, which would otherwise reschedule wipes
+    // forever (constant clipboard + PNG work that slows down the browser).
+    var lastClipWrite = 0;
     function overwriteClipboard(text) {
         text = text || ' ';
+        lastClipWrite = Date.now();
         try {
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(text).catch(function () { /* execCommand below covers it */ });
@@ -99,6 +104,7 @@
     function warmClipboard() {
         if (clipboardWarmed) { return; }
         clipboardWarmed = true;
+        lastClipWrite = Date.now();
         try {
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(' ');
@@ -113,6 +119,7 @@
     // (a single write can lose the race with the OS capture/history).
     try {
         navigator.clipboard.addEventListener('clipboardchange', function () {
+            if (Date.now() - lastClipWrite < 500) { return; }
             for (var i = 0; i < 4; i++) {
                 (function (t) {
                     setTimeout(function () { overwriteClipboard(' '); }, t);
