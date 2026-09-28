@@ -119,6 +119,7 @@ class SecurityLog
             'attempt_printscreen'    => 'Attempt to take a screenshot',
             'attempt_devtools'       => 'Attempt to open devtools',
             'attempt_drag'           => 'Attempt to drag text',
+            'attempt_window_switch'  => 'Window/tab switch (session closed)',
             'hack_duplicate_teacher' => 'Hack: 2nd teacher response',
             'hack_duplicate_conclusion' => 'Hack: 2nd conclusion',
             'hack_invalid_parent'    => 'Hack: reply to an invalid target',

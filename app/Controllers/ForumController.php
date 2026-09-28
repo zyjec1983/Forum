@@ -248,7 +248,7 @@ class ForumController extends Controller
 
         $allowed = [
             'copy', 'cut', 'paste', 'select', 'contextmenu',
-            'printscreen', 'devtools', 'drag',
+            'printscreen', 'devtools', 'drag', 'window_switch',
         ];
         if (!in_array($event, $allowed, true) && strpos($event, 'hack_') !== 0) {
             SecurityLog::record($user['id'], 'hack_' . $event, 'Unknown security event sent', client_ip());

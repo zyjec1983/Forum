@@ -1,8 +1,15 @@
 /* ============================================================
-   security.js · client-side security (forum pages only)
+   security.js · client-side security (forum pages, students only)
    Blocks: Copy, Cut, Paste, Select, context menu, drag and the
    developer tools. EVERY attempt is reported to the server with
    user, date/time, IP and platform.
+   On a REAL window/tab switch (Alt+Tab, another app, background
+   tab) the session is closed: the event is logged and the user
+   is redirected to sign out. Interactions inside the page (typing,
+   clicking, SweetAlert popups) never trigger it.
+   NOTE: everything here is passive (preventDefault) or only
+   navigates on exit; nothing steals focus or writes to the
+   clipboard, so normal buttons always keep working.
    ============================================================ */
 (function (window, document) {
     'use strict';
@@ -140,5 +147,77 @@
         setInterval(probe, 5000);
         window.addEventListener('resize', probe);
     })();
+
+    // ---------------- Session guard: real window/tab switch ----------------
+    // A REAL switch means the tab left the screen: window switched (Alt+Tab),
+    // another app covered it or the tab went to the background. The browser
+    // ALSO fires a window blur on in-page focus juggling (SweetAlert popups,
+    // focus rings, autofill) WITHOUT the tab leaving the screen, so those are
+    // only counted when the page is actually hidden.
+    var logoutPending = false;
+
+    function forceSignOut(label, detail) {
+        if (logoutPending) { return; }
+        logoutPending = true;
+
+        // Log the switch reliably before navigating away.
+        try {
+            var fd = new FormData();
+            fd.append('csrf', window.App.csrf());
+            fd.append('event', 'window_switch');
+            fd.append('detail', label + ' \u2014 ' + detail + ' · Device: ' + platform);
+            if (navigator.sendBeacon) {
+                navigator.sendBeacon(window.App.baseURL() + '/forum/report', fd);
+            } else {
+                window.App.post(window.App.baseURL() + '/forum/report', {
+                    event: 'window_switch',
+                    detail: label + ' \u2014 ' + detail
+                }).catch(function () { /* silent */ });
+            }
+        } catch (e) { /* no log if the helper is missing */ }
+
+        // Close the session: the student must sign in again.
+        try {
+            window.location.href = window.App.baseURL() + '/auth/logout';
+        } catch (e) { /* ignore */ }
+    }
+
+    // Fresh timestamp on every in-page interaction (click, typing, touch,
+    // walking through fields). A blur/visibility that happens while the user
+    // is clearly using the page is not a switch.
+    var lastInteraction = 0;
+    document.addEventListener('mousedown', function () { lastInteraction = Date.now(); }, true);
+    document.addEventListener('keydown', function () { lastInteraction = Date.now(); }, true);
+    document.addEventListener('touchstart', function () { lastInteraction = Date.now(); }, true);
+    document.addEventListener('focus', function () { lastInteraction = Date.now(); }, true);
+
+    function looksLikeSwitch() {
+        return (Date.now() - lastInteraction) > 150;
+    }
+
+    var everFocused = false;
+    window.addEventListener('focus', function () { everFocused = true; }, true);
+    window.addEventListener('blur', function () {
+        if (everFocused && looksLikeSwitch() && document.visibilityState === 'hidden') {
+            forceSignOut('Window/tab switch', 'the page left the screen');
+        }
+    }, true);
+
+    // No popup is open while the tab really goes to the background, so a
+    // micro-hide right after an in-page alert cannot be a switch.
+    function popupOpen() {
+        return !!document.querySelector('.swal2-container');
+    }
+
+    var seenVisible = document.visibilityState === 'visible';
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') {
+            seenVisible = true;
+            return;
+        }
+        if (seenVisible && looksLikeSwitch() && !popupOpen()) {
+            forceSignOut('Tab switch', 'the tab went to the background');
+        }
+    });
 
 })(window, document);

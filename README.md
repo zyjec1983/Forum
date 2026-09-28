@@ -284,6 +284,14 @@ All in `app/Helpers/functions.php`:
 All blocks are passive (`preventDefault`) — nothing writes to the clipboard or steals focus,
 so normal buttons (responses, final conclusion) are never affected.
 
+### Session guard on window/tab switches (students)
+`security.js` closes the student's session when the tab really leaves the screen (Alt+Tab,
+another app, background tab): it logs the `window_switch` event and redirects to sign-out.
+In-page interaction (typing, clicking, SweetAlert popups) never triggers it because a switch is
+only counted when `document.visibilityState === 'hidden'` and no interaction happened in the
+last 150 ms. `security.js` is only loaded for **students** (never for guests, teachers or the
+admin, who may switch freely while reviewing).
+
 ### Reporting / throttling
 Client events post to `forum/report` (CSRF-protected). Report throttling: 90 s for devtools,
 45 s for the rest, to avoid flooding the log. `security.js` detects the OS from the user agent

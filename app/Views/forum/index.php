@@ -218,6 +218,6 @@ $__interactive = ($interactive ?? false) && !$__isStaff;
 </div>
 
 <?php
-$scripts = $__isGuest ? ['forum'] : ['security', 'forum'];
+$scripts = ($__isStaff || $__isGuest) ? ['forum'] : ['security', 'forum'];
 include APP_PATH . '/Views/shared/_foot.php';
 ?>

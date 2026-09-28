@@ -68,6 +68,6 @@ $__hasAssigned = !empty($assigned);
 </div>
 
 <?php
-$scripts = $__isGuest ? [] : ['security'];
+$scripts = ($__isGuest || $__isStaff) ? [] : ['security'];
 include APP_PATH . '/Views/shared/_foot.php';
 ?>
