@@ -36,9 +36,17 @@ $__hasAssigned = !empty($assigned);
                 <div class="card-body text-center py-5">
                     <div class="fs-1 mb-3"><i class="bi bi-calendar2-x"></i></div>
                     <h1 class="h4 fw-bold mb-2">No active forum for you right now</h1>
-                    <?php if ($__isAdmin): ?>
-                        <p class="text-secondary small mb-4">Create a forum, assign it to one or more classrooms and open its participation window.</p>
-                        <a href="<?= e(base_url('admin/forum')) ?>" class="btn btn-primary btn-sm fw-bold">Create / activate forum</a>
+                    <?php if ($__isStaff): ?>
+                        <?php if ($__hasAssigned): ?>
+                            <p class="text-secondary small mb-4">
+                                Choose a forum from the <strong>My forums</strong> list to open it in <strong>read-only</strong> mode and review the students' activity.
+                            </p>
+                        <?php else: ?>
+                            <p class="text-secondary small mb-4">You have not created any forums yet. Create one and assign it to a classroom.</p>
+                        <?php endif; ?>
+                        <?php if ($__isAdmin): ?>
+                            <a href="<?= e(base_url('admin/forum')) ?>" class="btn btn-primary btn-sm fw-bold">Create / activate forum</a>
+                        <?php endif; ?>
                     <?php elseif ($__isGuest): ?>
                         <p class="text-secondary small mb-4">
                             The classroom you are auditing has no active forums at the moment. Come back later.

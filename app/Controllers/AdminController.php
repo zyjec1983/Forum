@@ -805,11 +805,31 @@ class AdminController extends Controller
         ]);
     }
 
+    /** Salons the current user may filter by (admin: all, teacher: their own). */
+    private function salonOptions(): array
+    {
+        return Salon::all($this->scope());
+    }
+
+    private function validSalonFilter(int $salonId): ?int
+    {
+        if ($salonId <= 0) {
+            return null;
+        }
+        foreach ($this->salonOptions() as $s) {
+            if ((int) $s['id'] === $salonId) {
+                return $salonId;
+            }
+        }
+        return null;
+    }
+
     public function responses(): void
     {
         $this->guard();
         $active = Forum::active();
         $teacherScope = $this->scope();
+        $salonFilter = $this->validSalonFilter((int) ($_GET['salon'] ?? 0));
         $summary = [];
         if ($active && ($teacherScope === null || (int) $active['created_by'] === $teacherScope)) {
             $summary = Response::partnerJoinedActions((int) $active['id']);
@@ -818,13 +838,16 @@ class AdminController extends Controller
             'type'       => $_GET['type'] ?? '',
             'search'     => $_GET['search'] ?? '',
             'teacher_id' => $teacherScope,
+            'salon_id'   => $salonFilter,
         ]);
         $this->view('admin/responses', [
-            'grouped'    => $this->responsesGrouped($rows),
-            'summary'    => $summary,
-            'filters'    => $_GET,
-            'activeForum'=> $active,
-            'pageTitle'  => 'Forum Responses',
+            'grouped'      => $this->responsesGrouped($rows),
+            'summary'      => $summary,
+            'filters'      => $_GET,
+            'salons'       => $this->salonOptions(),
+            'salonFilter'  => $salonFilter,
+            'activeForum'  => $active,
+            'pageTitle'    => 'Forum Responses',
         ]);
     }
 
@@ -864,10 +887,12 @@ class AdminController extends Controller
         $this->guard();
         csrf_check();
         $teacherScope = $this->scope();
+        $salonFilter  = $this->validSalonFilter((int) ($_POST['salon'] ?? 0));
         $rows = Response::studentActivity([
             'type'       => $_POST['type'] ?? '',
             'search'     => $_POST['search'] ?? '',
             'teacher_id' => $teacherScope,
+            'salon_id'   => $salonFilter,
         ]);
         $grouped      = $this->responsesGrouped($rows);
         $pdf          = new Pdf();
@@ -898,6 +923,12 @@ class AdminController extends Controller
             $teacher = User::findById($teacherScope);
             if ($teacher) {
                 $pdf->write('Docente: ' . $teacher['first_name'] . ' ' . $teacher['last_name']);
+            }
+        }
+        if ($salonFilter !== null) {
+            $salon = Salon::find($salonFilter);
+            if ($salon) {
+                $pdf->write('Curso: ' . $salon['name']);
             }
         }
         $pdf->write('Participantes: ' . $participants . '   Respuestas: ' . $total);

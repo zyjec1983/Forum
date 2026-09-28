@@ -7,6 +7,7 @@ $__assigned  = $assigned ?? [];
 $__activeId  = (int) ($activeForumId ?? 0);
 $__currentId = (int) ($currentForumId ?? 0);
 $__guest     = (current_user()['role'] ?? '') === 'guest';
+$__staff     = in_array(current_user()['role'] ?? '', ['admin', 'teacher'], true);
 ?>
 <aside>
     <div class="card border-0 shadow-sm mb-4">
@@ -15,7 +16,7 @@ $__guest     = (current_user()['role'] ?? '') === 'guest';
             <span class="badge rounded-pill text-bg-light text-secondary border ms-auto"><?= count($__assigned) ?></span>
         </div>
         <?php if (!$__assigned): ?>
-            <div class="card-body small text-muted">No forums have been assigned to your classroom yet.</div>
+            <div class="card-body small text-muted"><?= $__staff ? 'You have not created any forums yet.' : 'No forums have been assigned to your classroom yet.' ?></div>
         <?php else: ?>
             <div class="list-group list-group-flush small">
                 <?php foreach ($__assigned as $__af): ?>
@@ -23,7 +24,9 @@ $__guest     = (current_user()['role'] ?? '') === 'guest';
                     $__st  = time_status($__af);
                     $__cur = (int) $__af['id'] === $__currentId;
                     $__act = (int) $__af['id'] === $__activeId;
-                    $__link = $__act ? base_url('forum') : base_url('forum?id=' . (int) $__af['id']);
+                    // For staff the "active" shortcut always includes the id
+                    // (they have no classroom assignment to resolve on /forum).
+                    $__link = (!$__staff && $__act) ? base_url('forum') : base_url('forum?id=' . (int) $__af['id']);
                     ?>
                     <a href="<?= e($__link) ?>" class="list-group-item list-group-item-action px-3 py-2 <?= $__cur ? 'active' : '' ?>">
                         <div class="d-flex justify-content-between align-items-start gap-2">

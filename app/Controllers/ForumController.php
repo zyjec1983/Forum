@@ -10,10 +10,16 @@ class ForumController extends Controller
     {
         require_login();
         $user     = current_user();
+        $isStaff  = in_array($user['role'] ?? '', ['admin', 'teacher'], true);
         $salonId  = (int) ($user['salon_id'] ?? 0);
-        $assigned = Forum::forSalon($salonId);
         $active   = Forum::active();
         $activeId = $active ? (int) $active['id'] : 0;
+
+        // Sidebar list: staff see the forums they manage, students/guests the
+        // forums assigned to their classroom.
+        $assigned = $isStaff
+            ? Forum::all($user['role'] === 'teacher' ? (int) $user['id'] : null)
+            : Forum::forSalon($salonId);
 
         // Forum to display: an explicit id (if accessible) or the active forum
         // when it is assigned to the student's classroom.
@@ -23,15 +29,21 @@ class ForumController extends Controller
 
         if ($reqId) {
             $cand = Forum::find($reqId);
-            if ($cand && !Forum::isAssignedTo($reqId, $salonId)) {
-                flash_set('error', 'You do not have access to that forum.');
-                redirect(base_url('forum'));
-            }
             if ($cand) {
+                $allowed = false;
+                if ($isStaff) {
+                    $allowed = $user['role'] === 'admin' || Forum::ownedBy($reqId, (int) $user['id']);
+                } else {
+                    $allowed = Forum::isAssignedTo($reqId, $salonId);
+                }
+                if (!$allowed) {
+                    flash_set('error', 'You do not have access to that forum.');
+                    redirect(base_url('forum'));
+                }
                 $forum       = $cand;
                 $interactive = (int) $cand['id'] === $activeId && (int) $cand['is_active'] === 1;
             }
-        } else {
+        } elseif (!$isStaff) {
             if ($active && Forum::isAssignedTo($activeId, $salonId)) {
                 $forum       = $active;
                 $interactive = true;

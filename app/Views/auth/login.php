@@ -21,12 +21,12 @@
                         <?= csrf_field() ?>
                         <div class="mb-3">
                             <label class="form-label fw-semibold small">Institutional email</label>
-                            <input type="email" name="email" class="form-control" placeholder="your.email@ecomundo.edu.ec"
+                            <input type="email" name="email" class="form-control" placeholder="your.email@example.edu.ec"
                                    value="<?= e($_GET['email'] ?? '') ?>" required autofocus>
                         </div>
                         <div class="mb-3">
                             <label class="form-label fw-semibold small">Password</label>
-                            <input type="password" name="password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
+                            <input type="password" name="password" class="form-control" placeholder="Write your password" required autocomplete="current-password">
                         </div>
                         <button type="submit" class="btn btn-primary w-100 fw-semibold py-2">Sign in</button>
                     </form>
@@ -34,7 +34,7 @@
                     <div class="d-flex flex-column gap-2 mt-3 small">
                         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <a href="<?= e(base_url('auth/register')) ?>"><i class="bi bi-mortarboard"></i> Soy estudiante · Create account</a>
-                            <a href="<?= e(base_url('auth/register-teacher')) ?>"><i class="bi bi-person-workspace"></i> Soy docente · Teacher account</a>
+                            <a href="<?= e(base_url('auth/register-teacher')) ?>"><i class="bi bi-person-workspace"></i> Soy docente · Create a Teacher account</a>
                         </div>
                         <div>
                             <a href="<?= e(base_url('auth/recover')) ?>" class="text-danger text-decoration-none">

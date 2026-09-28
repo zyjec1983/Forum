@@ -140,6 +140,10 @@ class Response
             $sql .= " AND r.forum_id IN (SELECT id FROM forums WHERE created_by = ?)";
             $params[] = (int) $filters['teacher_id'];
         }
+        if (!empty($filters['salon_id'])) {
+            $sql      .= " AND u.salon_id = ?";
+            $params[] = (int) $filters['salon_id'];
+        }
         if (!empty($filters['search'])) {
             $sql .= " AND (u.first_name LIKE ? OR u.last_name LIKE ? OR r.content LIKE ? OR u.email LIKE ?)";
             $like = '%' . $filters['search'] . '%';

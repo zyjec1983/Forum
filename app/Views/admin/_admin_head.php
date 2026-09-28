@@ -11,7 +11,7 @@ $__isAdminRole = $__role === 'admin';
         <a class="navbar-brand fw-bold small" href="<?= e(base_url('admin')) ?>">⚙ <?= e(APP_NAME) ?></a>
         <div class="d-flex align-items-center gap-2 ms-auto">
             <span class="badge bg-light text-dark small"><?= $__isAdminRole ? 'Administrator' : 'Teacher' ?></span>
-            <a href="<?= e(base_url('forum')) ?>" class="btn btn-sm btn-outline-light">View forum</a>
+            <a href="<?= e(base_url('forum')) ?>" class="btn btn-sm btn-outline-light">My Forums</a>
             <a href="<?= e(base_url('/')) ?>" class="btn btn-sm btn-outline-light">Go to home</a>
             <a href="<?= e(base_url('auth/logout')) ?>" class="btn btn-sm btn-light">Sign out</a>
         </div>
@@ -26,6 +26,7 @@ $__isAdminRole = $__role === 'admin';
                     <div class="d-flex flex-column flex-lg-column gap-1">
                         <a href="<?= e(base_url('admin')) ?>" class="admin-link <?= $__active === 'dashboard' ? 'active' : '' ?>"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a>
                         <a href="<?= e(base_url('admin/forum')) ?>" class="admin-link <?= $__active === 'forum' ? 'active' : '' ?>"><i class="bi bi-chat-square-text me-2"></i>Forum Management</a>
+                        <a href="<?= e(base_url('forum')) ?>" class="admin-link"><i class="bi bi-eye me-2"></i>My Forums (read-only)</a>
                         <a href="<?= e(base_url('admin/salones')) ?>" class="admin-link <?= $__active === 'salones' ? 'active' : '' ?>"><i class="bi bi-mortarboard me-2"></i>Classrooms</a>
                         <a href="<?= e(base_url('admin/students')) ?>" class="admin-link <?= $__active === 'students' ? 'active' : '' ?>"><i class="bi bi-people me-2"></i>Students</a>
                         <a href="<?= e(base_url('admin/guests')) ?>" class="admin-link <?= $__active === 'guests' ? 'active' : '' ?>"><i class="bi bi-incognito me-2"></i>Guest Accounts</a>
