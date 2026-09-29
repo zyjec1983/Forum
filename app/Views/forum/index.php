@@ -51,6 +51,9 @@ $__interactive = ($interactive ?? false) && !$__isStaff;
                     'assigned'       => $assigned ?? [],
                     'activeForumId'  => $activeForumId ?? 0,
                     'currentForumId' => $currentForumId ?? 0,
+                    'salonFilter'    => $salonFilter ?? 0,
+                    'forumCourses'   => $forumCourses ?? [],
+                    'courseCounts'   => $courseCounts ?? [],
                 ]) ?>
             </div>
 

@@ -192,6 +192,24 @@ class Response
         return Database::fetchAll($sql, $params);
     }
 
+    /** Distinct students who answered the teacher in a forum, grouped per classroom: salon_id => count. */
+    public static function courseCounts(int $forumId): array
+    {
+        $rows = Database::fetchAll(
+            "SELECT u.salon_id, COUNT(DISTINCT r.user_id) AS c
+             FROM responses r
+             JOIN users u ON u.id = r.user_id
+             WHERE r.forum_id = ? AND r.type = 'teacher' AND u.salon_id IS NOT NULL
+             GROUP BY u.salon_id",
+            [$forumId]
+        );
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(int) $row['salon_id']] = (int) $row['c'];
+        }
+        return $out;
+    }
+
     public static function total(?int $teacherId = null): int
     {
         if ($teacherId === null) {

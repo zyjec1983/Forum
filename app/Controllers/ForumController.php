@@ -95,6 +95,23 @@ class ForumController extends Controller
             ];
         }
 
+        // Courses assigned to THIS forum + per-course participation counts
+        // (staff only), so the sidebar offers one entry per course.
+        $forumCourses = [];
+        $courseCounts = [];
+        if ($isStaff) {
+            $mine = [];
+            foreach ($staffSalons as $s) {
+                $mine[] = (int) $s['id'];
+            }
+            foreach (Forum::salonsInfo((int) $forum['id']) as $s) {
+                if ($user['role'] === 'admin' || in_array((int) $s['id'], $mine, true)) {
+                    $forumCourses[] = $s;
+                }
+            }
+            $courseCounts = Response::courseCounts((int) $forum['id']);
+        }
+
         $this->view('forum/index', [
             'user'           => $user,
             'forum'          => $forum,
@@ -104,6 +121,8 @@ class ForumController extends Controller
             'currentForumId' => (int) $forum['id'],
             'salons'         => $staffSalons,
             'salonFilter'    => $salonFilter,
+            'forumCourses'   => $forumCourses,
+            'courseCounts'   => $courseCounts,
             'interactive'    => $interactive,
             'hasTeacher'     => Response::hasTeacherResponse((int) $forum['id'], (int) $user['id']),
             'hasConclusion'  => Response::hasConclusion((int) $forum['id'], (int) $user['id']),

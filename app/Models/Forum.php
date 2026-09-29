@@ -116,6 +116,19 @@ class Forum
         return $ids;
     }
 
+    /** Salons (id + name) the forum is assigned to, ordered by name. */
+    public static function salonsInfo(int $forumId): array
+    {
+        return Database::fetchAll(
+            "SELECT s.id, s.name
+             FROM salones s
+             JOIN forum_salones fs ON fs.salon_id = s.id
+             WHERE fs.forum_id = ?
+             ORDER BY s.name ASC",
+            [$forumId]
+        );
+    }
+
     /** Replaces the classroom assignment of a forum. */
     public static function setSalons(int $forumId, array $salonIds): void
     {
