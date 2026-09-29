@@ -12,6 +12,25 @@ class ForumController extends Controller
         $user     = current_user();
         $isStaff  = in_array($user['role'] ?? '', ['admin', 'teacher'], true);
         $salonId  = (int) ($user['salon_id'] ?? 0);
+
+        // Visibility scope:
+        //  - students ONLY see students of their own classroom (enforced)
+        //  - staff can focus one of their classrooms (GET ?salon=) or see all
+        //  - guests see everything (auditors)
+        $salonFilter = 0;
+        $staffSalons = [];
+        if ($isStaff) {
+            $staffSalons = Salon::all($user['role'] === 'teacher' ? (int) $user['id'] : null);
+            $wanted      = (int) ($_GET['salon'] ?? 0);
+            foreach ($staffSalons as $s) {
+                if ((int) $s['id'] === $wanted) {
+                    $salonFilter = $wanted;
+                    break;
+                }
+            }
+        } elseif (($user['role'] ?? '') === 'student') {
+            $salonFilter = $salonId;
+        }
         $active   = Forum::active();
         $activeId = $active ? (int) $active['id'] : 0;
 
@@ -68,10 +87,11 @@ class ForumController extends Controller
         }
 
         $cards = [];
-        foreach (Response::teacherResponses((int) $forum['id']) as $response) {
+        $scoped = $salonFilter > 0 ? $salonFilter : null;
+        foreach (Response::teacherResponses((int) $forum['id'], $scoped) as $response) {
             $cards[] = [
                 'response' => $response,
-                'replies'  => Response::partnerReplies((int) $response['id']),
+                'replies'  => Response::partnerReplies((int) $response['id'], $scoped),
             ];
         }
 
@@ -82,6 +102,8 @@ class ForumController extends Controller
             'assigned'       => $assigned,
             'activeForumId'  => $activeId,
             'currentForumId' => (int) $forum['id'],
+            'salons'         => $staffSalons,
+            'salonFilter'    => $salonFilter,
             'interactive'    => $interactive,
             'hasTeacher'     => Response::hasTeacherResponse((int) $forum['id'], (int) $user['id']),
             'hasConclusion'  => Response::hasConclusion((int) $forum['id'], (int) $user['id']),
@@ -169,9 +191,10 @@ class ForumController extends Controller
 
         $parentId = (int) ($_POST['parent_id'] ?? 0);
         $parent   = Response::findById($parentId);
-        // The target must be a teacher response within the active forum.
-        if (!$parent || $parent['type'] !== 'teacher' || (int) $parent['forum_id'] !== (int) $forum['id']) {
-            $this->hack('hack_invalid_parent', 'Reply to an invalid target (parent_id=' . $parentId . ')', $user);
+        // The target must be a "teacher" answer inside the active forum AND,
+        // for students, belong to a classmate of the SAME classroom.
+        if (!$parent || !Response::isReplyTargetValid($parentId, (int) $forum['id'], (int) ($user['salon_id'] ?? 0))) {
+            $this->hack('hack_invalid_parent', 'Reply to an invalid or cross-classroom target (parent_id=' . $parentId . ')', $user);
         }
 
         $content = trim($_POST['content'] ?? '');

@@ -7,18 +7,29 @@
  */
 class Response
 {
-    public static function teacherResponses(int $forumId): array
+    /**
+     * Student answers to the teacher.
+     * When $salonId is given and > 0, only answers from students of that
+     * classroom are returned (visibility isolation between courses).
+     */
+    public static function teacherResponses(int $forumId, ?int $salonId = null): array
     {
         $sql = "SELECT r.*, u.first_name, u.last_name, s.name AS salon_name
                 FROM responses r
                 JOIN users u ON u.id = r.user_id
                 LEFT JOIN salones s ON s.id = u.salon_id
-                WHERE r.forum_id = ? AND r.type = 'teacher'
-                ORDER BY r.created_at DESC";
-        return Database::fetchAll($sql, [$forumId]);
+                WHERE r.forum_id = ? AND r.type = 'teacher'";
+        $params = [$forumId];
+        if ($salonId !== null && $salonId > 0) {
+            $sql      .= " AND u.salon_id = ?";
+            $params[] = $salonId;
+        }
+        $sql .= " ORDER BY r.created_at DESC";
+        return Database::fetchAll($sql, $params);
     }
 
-    public static function partnerReplies(int $responseId): array
+    /** Partner replies under a student answer (WhatsApp style). Same classroom isolation as above. */
+    public static function partnerReplies(int $responseId, ?int $salonId = null): array
     {
         $sql = "SELECT r.*, u.first_name, u.last_name,
                        pu.first_name AS parent_fn, pu.last_name AS parent_ln
@@ -26,9 +37,14 @@ class Response
                 JOIN users u ON u.id = r.user_id
                 LEFT JOIN responses pr ON pr.id = r.parent_id
                 LEFT JOIN users pu ON pu.id = pr.user_id
-                WHERE r.parent_id = ? AND r.type = 'partner'
-                ORDER BY r.created_at ASC";
-        return Database::fetchAll($sql, [$responseId]);
+                WHERE r.parent_id = ? AND r.type = 'partner'";
+        $params = [$responseId];
+        if ($salonId !== null && $salonId > 0) {
+            $sql      .= " AND u.salon_id = ?";
+            $params[] = $salonId;
+        }
+        $sql .= " ORDER BY r.created_at ASC";
+        return Database::fetchAll($sql, $params);
     }
 
     public static function findById(int $id): ?array
@@ -48,6 +64,27 @@ class Response
             [$forumId, $userId, $parentId, $type, trim($content)]
         );
         return Database::insertId();
+    }
+
+    /**
+     * Whether a student reply target (a "teacher" answer) is reachable:
+     * belongs to the active forum and, when $salonId is given, to a classmate
+     * of the SAME classroom (answer of other courses is never a valid target).
+     */
+    public static function isReplyTargetValid(int $parentId, int $forumId, ?int $salonId): bool
+    {
+        if ($salonId !== null && $salonId > 0) {
+            return (bool) Database::fetchOne(
+                "SELECT 1
+                 FROM responses r JOIN users u ON u.id = r.user_id
+                 WHERE r.id = ? AND r.forum_id = ? AND r.type = 'teacher' AND u.salon_id = ? LIMIT 1",
+                [$parentId, $forumId, $salonId]
+            );
+        }
+        return (bool) Database::fetchOne(
+            "SELECT 1 FROM responses WHERE id = ? AND forum_id = ? AND type = 'teacher' LIMIT 1",
+            [$parentId, $forumId]
+        );
     }
 
     public static function hasTeacherResponse(int $forumId, int $userId): bool

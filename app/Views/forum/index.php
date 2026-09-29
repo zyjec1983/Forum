@@ -154,9 +154,28 @@ $__interactive = ($interactive ?? false) && !$__isStaff;
 
             <!-- Student contributions and interactions -->
             <section>
-                <h4 class="small text-uppercase fw-bold text-secondary mb-3">Student Contributions and Interactions
-                    <span class="badge rounded-pill text-bg-light text-secondary border ms-1"><?= count($cards) ?></span>
-                </h4>
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                    <h4 class="small text-uppercase fw-bold text-secondary mb-0">Student Contributions and Interactions
+                        <?php if (!$__isStaff && !empty($user['salon_name'])): ?>
+                            <span class="badge rounded-pill text-bg-primary-subtle text-primary border ms-1"><?= e($user['salon_name']) ?></span>
+                        <?php endif; ?>
+                        <span class="badge rounded-pill text-bg-light text-secondary border ms-1"><?= count($cards) ?></span>
+                    </h4>
+                    <?php if ($__isStaff && !empty($salons)): ?>
+                        <form method="get" action="<?= e(base_url('forum')) ?>" class="d-flex align-items-center gap-2">
+                            <input type="hidden" name="id" value="<?= (int) $forum['id'] ?>">
+                            <label class="small text-secondary fw-semibold mb-0 text-nowrap">Course</label>
+                            <select name="salon" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+                                <option value="0">All courses</option>
+                                <?php foreach ($salons as $__s): ?>
+                                    <option value="<?= (int) $__s['id'] ?>" <?= (int) ($salonFilter ?? 0) === (int) $__s['id'] ? 'selected' : '' ?>>
+                                        <?= e($__s['name']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </form>
+                    <?php endif; ?>
+                </div>
                 <div id="forum-thread" class="d-flex flex-column gap-1">
                     <?php foreach ($cards as $card): ?>
                         <?= View::renderPartial('forum/_teacher_card', [
