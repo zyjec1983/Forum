@@ -49,6 +49,21 @@ class Salon
         Database::execute("DELETE FROM salones WHERE id = ?", [$id]);
     }
 
+    /** Students assigned to a classroom, ordered by last name / first name. */
+    public static function studentsOf(int $salonId): array
+    {
+        if ($salonId <= 0) {
+            return [];
+        }
+        return Database::fetchAll(
+            "SELECT id, first_name, last_name, email
+             FROM users
+             WHERE salon_id = ? AND role = 'student'
+             ORDER BY last_name ASC, first_name ASC",
+            [$salonId]
+        );
+    }
+
     public static function count(?int $teacherId = null): int
     {
         if ($teacherId === null) {

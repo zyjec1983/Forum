@@ -210,6 +210,45 @@ class Response
         return $out;
     }
 
+    /**
+     * Participation summary grouped BY CLASSROOM: every student of the
+     * classrooms assigned to the forum appears (even with 0 responses), so the
+     * teacher sees the full roster per course. When $salonFilter is set only
+     * that classroom is returned (courses never mix in the result).
+     */
+    public static function summaryByCourse(int $forumId, ?int $salonFilter = null): array
+    {
+        $salonIds = Forum::salonsOf($forumId);
+        if ($salonFilter !== null && $salonFilter > 0) {
+            $salonIds = array_values(array_intersect($salonIds, [$salonFilter]));
+        }
+        if (!$salonIds) {
+            return [];
+        }
+        $in   = implode(',', array_map('intval', $salonIds));
+        $rows = Database::fetchAll(
+            "SELECT s.id AS salon_id, s.name AS salon_name,
+                    u.id AS user_id, u.first_name, u.last_name, u.email,
+                    SUM(r.type = 'teacher')    AS teacher_responses,
+                    SUM(r.type = 'partner')    AS partner_replies,
+                    SUM(r.type = 'conclusion') AS conclusions
+             FROM salones s
+             JOIN users u ON u.salon_id = s.id AND u.role = 'student'
+             LEFT JOIN responses r ON r.user_id = u.id AND r.forum_id = ?
+             WHERE s.id IN ($in)
+             GROUP BY s.id, s.name, u.id, u.first_name, u.last_name, u.email
+             ORDER BY s.name ASC, u.last_name ASC, u.first_name ASC",
+            [$forumId]
+        );
+        foreach ($rows as &$row) {
+            $row['teacher_responses'] = (int) $row['teacher_responses'];
+            $row['partner_replies']   = (int) $row['partner_replies'];
+            $row['conclusions']       = (int) $row['conclusions'];
+        }
+        unset($row);
+        return $rows;
+    }
+
     public static function total(?int $teacherId = null): int
     {
         if ($teacherId === null) {

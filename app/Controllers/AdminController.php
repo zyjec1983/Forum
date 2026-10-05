@@ -851,6 +851,42 @@ class AdminController extends Controller
         ]);
     }
 
+    /** Separate view: participation summary per classroom of the active forum (roster included). */
+    public function responseSummary(): void
+    {
+        $this->guard();
+        $active       = Forum::active();
+        $teacherScope = $this->scope();
+        $salonFilter  = $this->validSalonFilter((int) ($_GET['salon'] ?? 0));
+
+        $summary = [];
+        if ($active && ($teacherScope === null || (int) $active['created_by'] === $teacherScope)) {
+            $summary = Response::summaryByCourse((int) $active['id'], $salonFilter);
+        }
+
+        $totals = ['students' => 0, 'teacher' => 0, 'partner' => 0, 'conclusion' => 0, 'participated' => 0, 'pending' => 0];
+        foreach ($summary as $r) {
+            $totals['students']++;
+            $totals['teacher']    += $r['teacher_responses'];
+            $totals['partner']    += $r['partner_replies'];
+            $totals['conclusion'] += $r['conclusions'];
+            if ($r['teacher_responses'] > 0 || $r['partner_replies'] > 0 || $r['conclusions'] > 0) {
+                $totals['participated']++;
+            } else {
+                $totals['pending']++;
+            }
+        }
+
+        $this->view('admin/response_summary', [
+            'salons'      => $this->salonOptions(),
+            'salonFilter' => $salonFilter,
+            'activeForum' => $active,
+            'courses'     => $summary,
+            'totals'      => $totals,
+            'pageTitle'   => 'Participation Summary',
+        ]);
+    }
+
     /** Groups participation rows per student, sorted last name / first name (case-insensitive). */
     private function responsesGrouped(array $rows): array
     {

@@ -28,45 +28,15 @@ foreach ($grouped as $__g) { $__responsesCount += count($__g['responses']); }
 </div>
 
 <?php if ($activeForum): ?>
-    <div class="card border-0 shadow-sm mb-3">
-        <div class="card-header bg-white fw-bold small">Participation summary · <?= e($activeForum['title']) ?></div>
-        <div class="table-responsive">
-            <table class="table table-hover align-middle small mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Student</th>
-                        <th>Classroom</th>
-                        <th>Teacher response</th>
-                        <th>Partner replies</th>
-                        <th>Conclusion</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($summary as $row): ?>
-                        <tr>
-                            <td>
-                                <span class="avatar avatar-xs avatar-slate me-2"><?= e(initials($row['first_name'] . ' ' . $row['last_name'])) ?></span>
-                                <?= e($row['first_name'] . ' ' . $row['last_name']) ?>
-                                <div class="text-muted"><?= e($row['email']) ?></div>
-                            </td>
-                            <td><?= e($row['salon_name'] ?? '—') ?></td>
-                            <td><?= (int) $row['teacher_responses'] ?></td>
-                            <td><?= (int) $row['partner_replies'] ?></td>
-                            <td>
-                                <?php if ((int) $row['conclusions']): ?>
-                                    <span class="badge text-bg-success">Submitted</span>
-                                <?php else: ?>
-                                    <span class="badge text-bg-light text-secondary border">Pending</span>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                    <?php if (!$summary): ?>
-                        <tr><td colspan="5" class="text-center text-muted py-4">There are no participations in the active forum yet.</td></tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <div class="small text-muted">
+            <i class="bi bi-clipboard-data me-1"></i>
+            Participation summary · <strong><?= e($activeForum['title']) ?></strong>
+            (per course)
         </div>
+        <a class="btn btn-sm btn-outline-primary" href="<?= e(base_url('admin/responses/summary')) ?>">
+            <i class="bi bi-people me-1"></i>View participation summary (all students per course)
+        </a>
     </div>
 <?php endif; ?>
 

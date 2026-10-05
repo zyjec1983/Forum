@@ -55,5 +55,6 @@ $router->get('admin/logs', [AdminController::class, 'logs']);
 $router->post('admin/logs/delete', [AdminController::class, 'logDelete']);
 $router->post('admin/logs/clear', [AdminController::class, 'logsClear']);
 $router->get('admin/responses', [AdminController::class, 'responses']);
+    $router->get('admin/responses/summary', [AdminController::class, 'responseSummary']);
 $router->post('admin/responses/export', [AdminController::class, 'responsesExport']);
 $router->post('admin/responses/delete', [AdminController::class, 'responseDelete']);
