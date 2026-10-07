@@ -55,8 +55,13 @@ audit log.
   attempt (PrtSc, snip tool, window/tab switch), the clipboard is wiped (text **and image**
   formats), and the student's session is force-closed.
 - **Security audit** – `security_logs` records logins, lockouts, time-window violations,
-  hacking attempts and all blocked actions; browsable from the panel. The super-administrator
-  can delete individual entries or clear the whole log.
+  hacking attempts and all blocked actions; browsable from the panel (filterable by course).
+  The super-administrator can delete individual entries or clear the whole log.
+- **Copy-intent report (A4 PDF)** – `/admin/logs` prints a configurable PDF: course, professor
+  and forum topic in the header, then the counters of the blocked actions (copy, cut, paste,
+  selection, context menu, screenshot, devtools, drag, tab/window switch) per event and per
+  student, with the option of the full roster (zeroes included) and the detail of each attempt.
+  Only students are counted and teachers only see their own classrooms.
 - **Configuration (domains)** – super-admin and teachers can toggle "accept any domain" and
   edit the list of accepted email domains.
 - **Guest accounts (read-only)** – teachers create invited accounts (`guest` role) with a
@@ -172,7 +177,9 @@ Defined in `app/routes.php`.
 | `GET admin/teachers` · `POST admin/teachers/delete` | Teacher list (admin only) |
 | `GET admin/settings` · `POST admin/settings/save` | Domain / registration settings |
 | `GET admin/logs` · `POST admin/logs/delete/clear` | Security audit (delete/clear = admin only) |
+| `POST admin/logs/export` | A4 PDF with the copy-intent counters (course filter) |
 | `GET admin/responses` · `POST admin/responses/delete` | Review participations (delete = admin only) |
+| `GET admin/responses/summary` | Participation summary per classroom |
 
 ---
 

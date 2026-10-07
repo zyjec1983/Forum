@@ -52,6 +52,7 @@ $router->post('admin/settings/upload-image', [AdminController::class, 'settingsU
 $router->post('admin/settings/pick-image', [AdminController::class, 'settingsPickImage']);
 $router->post('admin/settings/remove-image', [AdminController::class, 'settingsRemoveImage']);
 $router->get('admin/logs', [AdminController::class, 'logs']);
+$router->post('admin/logs/export', [AdminController::class, 'logsExport']);
 $router->post('admin/logs/delete', [AdminController::class, 'logDelete']);
 $router->post('admin/logs/clear', [AdminController::class, 'logsClear']);
 $router->get('admin/responses', [AdminController::class, 'responses']);

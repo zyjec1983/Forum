@@ -796,13 +796,286 @@ class AdminController extends Controller
             'logs'    => SecurityLog::all([
                 'event'    => $_GET['event'] ?? '',
                 'search'   => $_GET['search'] ?? '',
+                'salon_id' => $this->validSalonFilter((int) ($_GET['salon'] ?? 0)),
                 'user_ids' => $userIds,
             ]),
             'filters'    => $_GET,
             'scoped'     => $userIds !== null,
             'eventLabel' => [SecurityLog::class, 'eventLabel'],
+            'salons'     => $this->salonOptions(),
+            'salonFilter' => $this->validSalonFilter((int) ($_GET['salon'] ?? 0)),
+            'forums'     => Forum::all($this->scope()),
+            'activeForum' => Forum::active(),
             'pageTitle'  => 'Security Log / Audit',
         ]);
+    }
+
+    /** Pads a UTF-8 string to a fixed CHARACTER width (PDF column alignment). */
+    private static function pcol(string $s, int $width, bool $left = false): string
+    {
+        if (mb_strlen($s) > $width) {
+            $s = mb_substr($s, 0, $width);
+        }
+        $pad = str_repeat(' ', max(0, $width - mb_strlen($s)));
+        return $left ? $pad . $s : $s . $pad;
+    }
+
+    /**
+     * PRINT (A4 PDF) of the copy-intent attempt counters: course, professor
+     * and forum topic as header, then the sections chosen in the interface.
+     */
+    public function logsExport(): void
+    {
+        $this->guard();
+        csrf_check();
+
+        $teacherScope = $this->scope();
+        $salonFilter  = $this->validSalonFilter((int) ($_POST['salon'] ?? 0));
+        $events       = array_values(array_intersect(
+            (array) ($_POST['events'] ?? []),
+            SecurityLog::ATTEMPT_EVENTS
+        ));
+        if (!$events) {
+            flash_set('error', 'Select at least one type of attempt to print.');
+            redirect(base_url('admin/logs'));
+            return;
+        }
+
+        $includeZeros  = !empty($_POST['include_zeros']);
+        $includeDetail = !empty($_POST['include_detail']);
+
+        // Scope (teacher: their own account + their students/guests).
+        $userIds = null;
+        if ($teacherScope !== null) {
+            $scopeStudents = User::all(['role' => 'student', 'teacher_id' => $teacherScope]);
+            $scopeGuests   = User::all(['role' => 'guest', 'teacher_id' => $teacherScope]);
+            $userIds       = array_merge(
+                [$teacherScope],
+                array_column($scopeStudents, 'id'),
+                array_column($scopeGuests, 'id')
+            );
+        }
+
+        $filters = [
+            'events'   => $events,
+            'salon_id' => $salonFilter,
+            'user_ids' => $userIds,
+        ];
+
+        // ------------------------------------------------------------------
+        // Row data: counters per student, totals per event, optional detail
+        // ------------------------------------------------------------------
+        $students = [];
+        foreach (SecurityLog::attemptsByStudent($filters) as $row) {
+            $key = (int) $row['user_id'];
+            if (!isset($students[$key])) {
+                $students[$key] = [
+                    'last'   => $row['last_name'],
+                    'first'  => $row['first_name'],
+                    'counts' => [],
+                ];
+            }
+            $students[$key]['counts'][$row['event']] = (int) $row['total'];
+        }
+
+        if ($includeZeros) {
+            $roster = $salonFilter !== null
+                ? User::all(['role' => 'student', 'salon_id' => $salonFilter])
+                : User::all(array_merge(
+                    ['role' => 'student'],
+                    $teacherScope !== null ? ['teacher_id' => $teacherScope] : []
+                ));
+            foreach ($roster as $u) {
+                $key = (int) $u['id'];
+                if (isset($students[$key])) {
+                    continue;
+                }
+                $students[$key] = [
+                    'last'   => $u['last_name'],
+                    'first'  => $u['first_name'],
+                    'counts' => [],
+                ];
+            }
+        }
+
+        // Sort by last name / first name.
+        $list = [];
+        foreach ($students as $s) {
+            $s['sort'] = mb_strtoupper($s['last'] . ' ' . $s['first']);
+            $list[]    = $s;
+        }
+        usort($list, function ($a, $b) { return strcmp($a['sort'], $b['sort']); });
+
+        $eventTotal = [];
+        foreach ($events as $ev) {
+            $eventTotal[$ev] = ['total' => 0, 'students' => 0];
+        }
+        $grand = 0;
+        foreach (SecurityLog::attemptsByEvent($filters) as $row) {
+            $eventTotal[$row['event']] = [
+                'total'    => (int) $row['total'],
+                'students' => (int) $row['students'],
+            ];
+            $grand += (int) $row['total'];
+        }
+
+        // ------------------------------------------------------------------
+        // Header: course / professor / forum topic
+        // ------------------------------------------------------------------
+        $salons   = $this->salonOptions();
+        $course   = 'Todos los cursos';
+        $professor = '';
+        if ($salonFilter !== null) {
+            foreach ($salons as $s) {
+                if ((int) $s['id'] === $salonFilter) {
+                    $course    = $s['name'];
+                    $professor = trim(($s['first_name'] ?? '') . ' ' . ($s['teacher_name'] ?? ''));
+                    break;
+                }
+            }
+            if ($professor === '') {
+                $professor = 'No asignado';
+            }
+        }
+
+        $forumId = (int) ($_POST['forum'] ?? 0);
+        $forum   = $forumId ? Forum::find($forumId) : null;
+        if (!$forum) {
+            $forum = Forum::active();
+        }
+        if ($professor === '') {
+            if ($forum && trim(($forum['first_name'] ?? '') . ' ' . ($forum['last_name'] ?? '')) !== '') {
+                $professor = trim($forum['first_name'] . ' ' . $forum['last_name']);
+            } elseif ($teacherScope !== null) {
+                $t = User::findById($teacherScope);
+                $professor = $t ? $t['first_name'] . ' ' . $t['last_name'] : '—';
+            } else {
+                $names = [];
+                foreach ($salons as $s) {
+                    $n = trim(($s['first_name'] ?? '') . ' ' . ($s['teacher_name'] ?? ''));
+                    if ($n !== '') {
+                        $names[$n] = 1;
+                    }
+                }
+                $professor = $names ? implode(', ', array_keys($names)) : '—';
+            }
+        }
+        $topic   = $forum ? $forum['title'] : '(sin foro activo)';
+        $subject = $forum && trim((string) $forum['subject']) !== '' ? $forum['subject'] : '';
+
+        // ------------------------------------------------------------------
+        // PDF (A4)
+        // ------------------------------------------------------------------
+        $pdf = new Pdf();
+        $pdf->writeBold('FORO ACADEMICO ECOMUNDO');
+        $pdf->writeBold('CONTEO DE INTENTOS DE COPIA (ACCIONES BLOQUEADAS)');
+        $pdf->rule('=');
+        $pdf->write('CURSO: ' . $course);
+        $pdf->write('PROFESOR: ' . $professor);
+        $pdf->write('TEMA DEL FORO: ' . $topic);
+        if ($subject !== '') {
+            $pdf->write('ASIGNATURA: ' . $subject);
+        }
+        $pdf->blank();
+        $pdf->write('Generado: ' . date('d/m/Y H:i') . ' (hora local de Ecuador)');
+        $pdf->write('Ambito: ' . ($teacherScope === null ? 'TODOS LOS ESTUDIANTES' : 'MIS ESTUDIANTES'));
+        $pdf->write('Alumnos listados: ' . count($list));
+        $pdf->write('Intentos totales: ' . $grand);
+        $pdf->blank();
+        $pdf->write('Secciones: Resumen por evento, Conteo por alumno'
+            . ($includeDetail ? ', Detalle de cada intento' : ''));
+
+        // ---------------- Section 1: totals per event ----------------
+        $pdf->blank();
+        $pdf->writeBold('1) RESUMEN POR EVENTO');
+        $pdf->rule('-');
+        $pdf->writeBold(self::pcol('EVENTO', 36) . self::pcol('INTENTOS', 10, true) . self::pcol('ALUMNOS', 10, true));
+        foreach ($events as $ev) {
+            $pdf->write(
+                self::pcol(SecurityLog::eventLabel($ev), 36)
+                . self::pcol((string) ($eventTotal[$ev]['total'] ?? 0), 10, true)
+                . self::pcol((string) ($eventTotal[$ev]['students'] ?? 0), 10, true)
+            );
+        }
+        $pdf->rule('-');
+        $pdf->writeBold(self::pcol('TOTAL GENERAL', 36) . self::pcol((string) $grand, 10, true));
+
+        // ---------------- Section 2: matrix per student ----------------
+        $pdf->blank();
+        $pdf->writeBold('2) CONTEO POR ALUMNO (orden: apellidos)');
+        $pdf->rule('-');
+        if (!$list) {
+            $pdf->write('(sin intentos registrados con el filtro elegido)');
+        } else {
+            // Name 27 + up to 5 event columns of 9 + TOTAL 9 = 81 <= 82 (A4 width)
+            foreach (array_chunk($events, 5) as $chunk) {
+                $head = self::pcol('ALUMNO', 27);
+                foreach ($chunk as $ev) {
+                    $head .= self::pcol(mb_strtoupper(SecurityLog::ATTEMPT_SHORT[$ev] ?? $ev), 9);
+                }
+                $head .= self::pcol('TOTAL', 9);
+                $pdf->writeBold($head);
+
+                $colTotals = array_fill_keys($chunk, 0);
+                $chunkTotal = 0;
+                foreach ($list as $s) {
+                    $line = self::pcol(mb_strtoupper($s['last']) . ', ' . $s['first'], 27);
+                    $sum  = 0;
+                    foreach ($chunk as $ev) {
+                        $n               = (int) ($s['counts'][$ev] ?? 0);
+                        $sum            += $n;
+                        $colTotals[$ev] += $n;
+                        $line           .= self::pcol((string) $n, 9, true);
+                    }
+                    $chunkTotal += $sum;
+                    $line .= self::pcol((string) $sum, 9, true);
+                    $pdf->write($line);
+                }
+
+                $foot = self::pcol('TOTAL', 27);
+                foreach ($chunk as $ev) {
+                    $foot .= self::pcol((string) $colTotals[$ev], 9, true);
+                }
+                $foot .= self::pcol((string) $chunkTotal, 9, true);
+                $pdf->writeBold($foot);
+                $pdf->blank();
+            }
+            if ($includeZeros) {
+                $zeros = 0;
+                foreach ($list as $s) {
+                    if (!$s['counts']) {
+                        $zeros++;
+                    }
+                }
+                $pdf->write('(alumnos incluidos sin intentos: ' . $zeros . ')');
+            }
+        }
+
+        // ---------------- Section 3: optional detail ----------------
+        if ($includeDetail) {
+            $detail = SecurityLog::attemptsDetail($filters, 1500);
+            $pdf->blank();
+            $pdf->writeBold('3) DETALLE DE CADA INTENTO (' . count($detail) . (count($detail) === 1 ? ' registro' : ' registros') . ')');
+            $pdf->rule('-');
+            foreach ($detail as $d) {
+                $pdf->write(
+                    self::pcol(date('d/m/Y H:i', strtotime($d['created_at'])), 17)
+                    . self::pcol(mb_strtoupper($d['last_name']) . ', ' . $d['first_name'], 30)
+                    . self::pcol($d['ip'], 16)
+                    . (SecurityLog::eventLabel($d['event']))
+                );
+            }
+        }
+
+        $pdf->blank();
+        $pdf->writeBold('FIN DEL REPORTE');
+
+        $name = 'intentos-copia-' . date('Ymd-His') . '.pdf';
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: attachment; filename="' . $name . '"');
+        header('Cache-Control: no-store');
+        echo $pdf->render('Conteo de intentos de copia', 'ECOMUNDO');
+        exit;
     }
 
     /** Salons the current user may filter by (admin: all, teacher: their own). */

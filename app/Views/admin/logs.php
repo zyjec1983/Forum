@@ -26,10 +26,20 @@ $__clearConfirm = $__isAdminRole
 <form method="get" action="<?= e(base_url('admin/logs')) ?>" class="card border-0 shadow-sm mb-3">
     <div class="card-body py-2">
         <div class="row g-2 align-items-center">
-            <div class="col-12 col-md-5">
+            <div class="col-12 col-md-4">
                 <input type="search" name="search" class="form-control form-control-sm" placeholder="Search by user, email, detail or IP…" value="<?= e($filters['search'] ?? '') ?>">
             </div>
-            <div class="col-6 col-md-4">
+            <div class="col-6 col-md-3">
+                <select name="salon" class="form-select form-select-sm" title="Filter by course">
+                    <option value="">All courses</option>
+                    <?php foreach ($salons as $__salon): ?>
+                        <option value="<?= (int) $__salon['id'] ?>" <?= ($salonFilter ?? 0) == (int) $__salon['id'] ? 'selected' : '' ?>>
+                            <?= e($__salon['name']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-6 col-md-3">
                 <select name="event" class="form-select form-select-sm">
                     <option value="">All events</option>
                     <?php foreach (['attempt_copy', 'attempt_cut', 'attempt_paste', 'attempt_select', 'attempt_contextmenu', 'attempt_printscreen', 'attempt_devtools', 'attempt_drag', 'attempt_window_switch', 'hack_duplicate_teacher', 'hack_duplicate_conclusion', 'hack_invalid_parent', 'hack_role', 'time_block', 'time_not_started', 'login_failed', 'login_locked', 'login', 'register', 'recover', 'logout', 'student_created', 'forum_created', 'forum_edited', 'forum_reopened', 'forum_deleted', 'salon_created', 'salon_deleted', 'student_locked', 'student_unlocked', 'student_deleted', 'teacher_deleted', 'response_deleted', 'log_deleted', 'logs_cleared', 'settings_updated'] as $__ev): ?>
@@ -37,9 +47,70 @@ $__clearConfirm = $__isAdminRole
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-6 col-md-3">
+            <div class="col-6 col-md-2">
                 <button class="btn btn-sm btn-outline-primary w-100">Filter</button>
             </div>
+        </div>
+    </div>
+</form>
+
+<!-- Print (A4 PDF): choose course, forum topic and WHAT to print -->
+<form method="post" action="<?= e(base_url('admin/logs/export')) ?>" class="card border-0 shadow-sm mb-3">
+    <?= csrf_field() ?>
+    <div class="card-header bg-white fw-bold small"><i class="bi bi-printer me-1"></i>Print PDF (A4): copy-intent attempts</div>
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-12 col-md-3">
+                <label class="small fw-semibold text-secondary mb-1 d-block">Course (header + filter)</label>
+                <select name="salon" class="form-select form-select-sm">
+                    <option value="">All courses</option>
+                    <?php foreach ($salons as $__salon): ?>
+                        <option value="<?= (int) $__salon['id'] ?>" <?= ($salonFilter ?? 0) == (int) $__salon['id'] ? 'selected' : '' ?>>
+                            <?= e($__salon['name']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="small fw-semibold text-secondary mb-1 d-block">Forum topic (header)</label>
+                <select name="forum" class="form-select form-select-sm">
+                    <?php foreach ($forums as $__f): $__isActive = $activeForum && (int) $__f['id'] === (int) $activeForum['id']; ?>
+                        <option value="<?= (int) $__f['id'] ?>" <?= $__isActive ? 'selected' : '' ?>>
+                            <?= e($__f['title']) ?><?= $__isActive ? ' (active)' : '' ?>
+                        </option>
+                    <?php endforeach; ?>
+                    <?php if (!$forums): ?>
+                        <option value="0">No forum</option>
+                    <?php endif; ?>
+                </select>
+            </div>
+            <div class="col-12 col-md-5">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="include_zeros" id="inc_zeros" value="1">
+                    <label class="form-check-label small" for="inc_zeros">Include students with <strong>0</strong> attempts (full course roster)</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="include_detail" id="inc_detail" value="1" checked>
+                    <label class="form-check-label small" for="inc_detail">Include the list of every single attempt (date/time, student, IP)</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="small fw-semibold text-secondary mt-2 mb-1">What to print (counted actions):</div>
+        <div class="row g-1">
+            <?php foreach (SecurityLog::ATTEMPT_EVENTS as $__ev): ?>
+                <div class="col-6 col-md-4 col-xl-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="events[]" value="<?= e($__ev) ?>" id="ev<?= e($__ev) ?>" checked>
+                        <label class="form-check-label small" for="ev<?= e($__ev) ?>"><?= e($eventLabel($__ev)) ?></label>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+
+        <div class="mt-2">
+            <button class="btn btn-sm btn-danger"><i class="bi bi-file-earmark-pdf me-1"></i>Export PDF (A4)</button>
+            <span class="small text-muted ms-1">Header: course, professor and forum topic. Contents: summary by event + count per student.</span>
         </div>
     </div>
 </form>
